@@ -25,7 +25,7 @@ On first boot Mimic creates `data/mimic.sqlite3`, hashes `MIMIC_ADMIN_PASSWORD` 
 generates a session signing key into `data/.env`. It also generates a self-signed certificate
 into `data/certs/`, so every socket is HTTPS from the start. Nothing else is required.
 
-- **Admin**: <https://127.0.0.1:8080/admin> (self-signed until a Let's Encrypt cert is issued)
+- **Admin**: <https://127.0.0.1:8443/admin> (self-signed until a Let's Encrypt cert is issued)
 - **Health**: `GET /healthz`
 - **Registry stub**: `GET /v2/`, `GET /v2/_catalog`, tags and manifest routes, minimal blob/upload behaviour
 - **Webhook**: any verb on `/webhook/` and `/webhook/<subpath>`, with configurable JSON responses
