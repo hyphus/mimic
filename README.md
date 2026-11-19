@@ -25,11 +25,15 @@ On first boot Mimic creates `data/mimic.sqlite3`, hashes `MIMIC_ADMIN_PASSWORD` 
 generates a session signing key into `data/.env`. It also generates a self-signed certificate
 into `data/certs/`, so every socket is HTTPS from the start. Nothing else is required.
 
-- **Admin**: <https://127.0.0.1:8443/admin> (self-signed until a Let's Encrypt cert is issued)
+- **Admin**: <https://127.0.0.1:8080/admin> (self-signed until a Let's Encrypt cert is issued)
 - **Health**: `GET /healthz`
 - **Registry stub**: `GET /v2/`, `GET /v2/_catalog`, tags and manifest routes, minimal blob/upload behaviour
 - **Webhook**: any verb on `/webhook/` and `/webhook/<subpath>`, with configurable JSON responses
 - **httpbin**: `/httpbin/get`, `/httpbin/post`, `/httpbin/status/<code>`, `/httpbin/delay/<seconds>`, `/httpbin/uuid`
+- **Static**: `GET /static/` serves files from the module's `www/` directory; `/static/download` is a sample file download
+
+All four shipped modules are disabled by default (`default_enabled: false`); enable each one in the
+admin UI before its endpoints respond.
 
 ## How it works
 
@@ -66,6 +70,7 @@ built-in default — first one wins:
 | `MIMIC_ADMIN_BIND` | off | A second socket for `/admin` and `/healthz` only, also `host:port`. When set, Gunicorn serves both sockets and a port gate keeps `/admin` off the public one. Its port must differ from the public port. The dev server serves one socket, so it refuses to start when this is set and `MIMIC_PUBLIC_BIND` is not loopback. |
 | `MIMIC_GUNICORN_RELOAD_HUP` | off | If truthy, send **SIGHUP** to the Gunicorn master after config changes so all workers reload. On by default in the Docker image, off elsewhere. |
 | `MIMIC_USE_LE_STAGING` | off | Issue Let's Encrypt certificates from the staging directory instead of production — untrusted certificates, but no rate limits. |
+| `FLASK_DEBUG` | off | Dev server only; when set to `1`, enables Flask debug mode in `mimic.dev`. |
 
 Gunicorn itself reads `GUNICORN_ACCESS_LOG` and `GUNICORN_ERROR_LOG` (both default to stdout).
 `gunicorn.conf.py` maps `GUNICORN_TLS_VERSION` (default `TLSv1_2`) to the minimum TLS version.
@@ -144,7 +149,7 @@ all of them — so "overridden" on the dashboard always means "disk says somethi
 
 A module is either `kind: "manifest"` (the loader registers the manifest's `routes`, individual
 routes may name a `handler` method for real Python) or `kind: "custom"` (it overrides
-`build_blueprints` and declares no routes). All three shipped modules are `manifest`; `custom` is
+`build_blueprints` and declares no routes). All four shipped modules are `manifest`; `custom` is
 the escape hatch for a route table that a list cannot express.
 
 | Module | `default_prefix` | Routes |
@@ -152,6 +157,7 @@ the escape hatch for a route table that a list cannot express.
 | `docker_registry` | `/v2/` | canned responses |
 | `webhook` | `/webhook/` | canned responses |
 | `httpbin` | `/httpbin/` | every route names a `handler` — the hybrid worked example |
+| `static` | `/static/` | serves files from the module's `www/` directory, plus a sample download |
 
 Two enabled modules may not claim overlapping prefixes. The first to claim one wins; the other is
 skipped with a message on the dashboard.
@@ -191,13 +197,17 @@ polling timer.
 
 ## Docker
 
+The image is published on [Docker Hub](https://hub.docker.com/r/hyphus/mimic):
+
 ```bash
-docker build -t mimic .
 docker run --rm -p 8080:8080 -p 127.0.0.1:8443:8443 \
   -e MIMIC_ADMIN_PASSWORD=changeme \
   -v mimic-data:/data \
-  mimic
+  hyphus/mimic
 ```
+
+To build from source instead, run `docker build -t mimic .` and use `mimic` in place of
+`hyphus/mimic`.
 
 `MIMIC_DATA_DIR` is `/data` in the image, and `/data` is a volume — that is where the database,
 `.env`, and any certificates live. The image also sets `MIMIC_PUBLIC_BIND=0.0.0.0:8080` and
