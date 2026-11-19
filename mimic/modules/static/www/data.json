@@ -1,0 +1,8 @@
+{
+    "module": "static",
+    "served_from": "www/data.json",
+    "items": [
+        { "id": 1, "label": "first" },
+        { "id": 2, "label": "second" }
+    ]
+}

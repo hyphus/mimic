@@ -1,0 +1,60 @@
+{
+    "kind": "manifest",
+    "title": "Static Files",
+    "description": "Serves the files in this module's www/ directory, plus a sample download.",
+    "default_enabled": false,
+    "default_prefix": "/static/",
+    "max_concurrent": 4,
+    "strict_slashes": true,
+    "default_methods": [
+        "GET",
+        "HEAD"
+    ],
+    "routes": [
+        {
+            "uri": "",
+            "responses": [
+                {
+                    "response": {
+                        "file": "www/index.html"
+                    }
+                }
+            ]
+        },
+        {
+            "uri": "download",
+            "responses": [
+                {
+                    "response": {
+                        "file": "www/sample.txt",
+                        "download": true,
+                        "filename": "sample.txt"
+                    }
+                }
+            ]
+        },
+        {
+            "uri": "<path:wildcard>",
+            "responses": [
+                {
+                    "response": {
+                        "file": "www/{wildcard}"
+                    }
+                }
+            ]
+        }
+    ],
+    "error_pages": {
+        "404": {
+            "file": "www/404.html"
+        },
+        "500": {
+            "body": {
+                "error": "internal"
+            },
+            "headers": {
+                "Content-Type": "application/json"
+            }
+        }
+    }
+}

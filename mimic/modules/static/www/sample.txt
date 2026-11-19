@@ -1,0 +1,2 @@
+This file is served by the /static/download route with
+Content-Disposition: attachment, so browsers save it as sample.txt.

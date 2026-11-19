@@ -1,0 +1,70 @@
+{% extends "admin/base.html" %}
+{% block title %}Request log · Mimic{% endblock %}
+{% block body %}
+<h1>Request Log</h1>
+<p class="muted" id="logs-meta">{{ total }} entries · page {{ page }} of {{ pages }}</p>
+
+
+<div style="display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <form method="get" style="display: flex; gap: 10px; align-items: center; margin: 0; padding: 0.75rem 0; width: 400px">
+      <label for="module-filter" style="margin-right: 10px; white-space: nowrap;">Filter:</label>
+      <select name="module" id="module-filter" onchange="this.form.submit()" style="max-width: 200px;">
+        <option value="">All modules</option>
+        {% for module_id in unique_modules %}
+        <option value="{{ module_id }}" {% if module_filter == module_id %}selected{% endif %}>
+          {{ module_id }}
+        </option>
+        {% endfor %}
+      </select>
+      {% if module_filter %}
+      <button type="button" class="btn" onclick="window.location='{{ url_for('admin.logs') }}'">Clear filter</button>
+      {% endif %}
+    </form>
+    <label for="local-time-toggle" style="margin: 0; white-space: nowrap;">
+      <input type="checkbox" id="local-time-toggle" style="vertical-align: middle;">
+      <span style="vertical-align: middle;">Local time</span>
+    </label>
+  </div>
+  <form action="{{ url_for('admin.logs_clear') }}" method="post" onsubmit="return confirm('Clear all log entries?');"
+    style="margin: 0;">
+    {{ csrf_input() }}
+    <button type="submit" class="danger">Clear log</button>
+  </form>
+</div>
+
+<table id="log-table">
+  <thead>
+    <tr>
+      <th>Time</th>
+      <th>Method</th>
+      <th>Path</th>
+      <th>Module</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <!-- Rows are rendered client-side by main.js from /admin/logs/rows. -->
+  <tbody id="log-tbody"></tbody>
+</table>
+
+{% if pages > 1 %}
+<p class="muted" id="logs-pagination">
+  {% if page > 1 %}<a href="{{ url_for('admin.logs', page=page-1, per=per_page) }}">Previous</a>{% endif %}
+  {% if page < pages %} <a href="{{ url_for('admin.logs', page=page+1, per=per_page) }}">Next</a>{% endif %}
+</p>
+{% endif %}
+
+<p class="muted" id="logs-empty" hidden>No requests logged yet.</p>
+
+<script id="log-config" type="application/json">
+  {{ {
+    "rowsUrl": url_for("admin.logs_rows"),
+    "pollUrl": url_for("admin.logs_poll"),
+    "eventsUrl": url_for("admin.events"),
+    "page": page,
+    "perPage": per_page,
+    "pages": pages,
+    "total": total
+  } | tojson }}
+</script>
+{% endblock %}

@@ -1,0 +1,53 @@
+{
+    "kind": "manifest",
+    "title": "Webhook Receiver",
+    "description": "Configurable HTTP webhook and callback mocks; multiple verbs and sub-path responses.",
+    "default_enabled": false,
+    "default_prefix": "/webhook/",
+    "host": "",
+    "max_concurrent": 4,
+    "strict_slashes": true,
+    "default_methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "HEAD"
+    ],
+    "default_response": {
+        "passthrough": false,
+        "headers": {
+            "Content-Type": "application/json"
+        },
+        "status": 200,
+        "body": {
+            "default": true,
+            "received": true
+        }
+    },
+    "routes": [
+        {
+            "uri": "<path:wildcard>",
+            "responses": [
+                {
+                    "match": {
+                        "wildcard": "github/push"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "status": 200,
+                        "body": {
+                            "default": false,
+                            "test": true
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}

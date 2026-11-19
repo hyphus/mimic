@@ -1,0 +1,54 @@
+{
+    "kind": "manifest",
+    "title": "Template Module",
+    "description": "A template for creating new modules.",
+    "default_enabled": false,
+    "default_prefix": "/template/",
+    "host": null,
+    "max_concurrent": 4,
+    "strict_slashes": true,
+    "default_methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "HEAD"
+    ],
+    "default_response": {
+        "passthrough": false,
+        "headers": {
+            "Content-Type": "application/json"
+        },
+        "status": 200,
+        "body": {
+            "ok": true
+        }
+    },
+    "routes": [
+        {
+            "uri": "canned",
+            "responses": [
+                {
+                    "match": {
+                        "method": "GET"
+                    },
+                    "response": {
+                        "status": 200,
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": {
+                            "canned": true
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "uri": "echo",
+            "handler": "on_echo"
+        }
+    ]
+}

@@ -1,0 +1,411 @@
+{% extends "admin/base.html" %}
+{% block title %}Dashboard · Mimic{% endblock %}
+{% block body %}
+<h1>Dashboard</h1>
+<div class="panel">
+  <h2 style="margin: 0 0 0.75rem;">Modules</h2>
+  {% for error in load_errors %}
+  <p class="load-error">{{ error }}</p>
+  {% endfor %}
+  {% if modules %}
+  <table class="module-table" id="module-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Title</th>
+        <th>Base URI</th>
+        <th>Enabled</th>
+        <th>Loaded</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for mid, entry in modules | dictsort %}
+      <tr class="module-row{% if entry.errors %} row-warn{% endif %}{% if expanded == mid %} expanded{% endif %}" data-module-id="{{ mid }}">
+        <td class="module-cell-trigger"><code>{{ mid }}</code></td>
+        <td class="module-cell-trigger">{{ entry.title }}</td>
+        <td class="module-cell-trigger">
+          <code>{{ entry.path_prefix or '—' }}</code>
+        </td>
+        <td>
+          <form class="module-toggle" method="post" action="{{ url_for('admin.module_toggle', module_id=mid) }}">
+            {{ csrf_input() }}
+            <input type="hidden" name="enabled" value="{{ '1' if entry.enabled else '0' }}">
+            <label class="switch">
+              <input type="checkbox" {% if entry.enabled %}checked{% endif %} onchange="this.form.querySelector('[name=enabled]').value=this.checked?'1':'0'; this.form.submit();">
+              <span class="slider"></span>
+            </label>
+          </form>
+        </td>
+        <td class="module-cell-trigger" style="text-align:justify;">{% if mid in loaded_ids %}&#x2713;{% else %}&#10060;{% endif %}</td>
+      </tr>
+      <tr class="module-row-detail" {% if expanded != mid %}hidden{% endif %}>
+        <td colspan="5" class="module-detail-cell">
+          {% for error in entry.errors %}
+          <p class="load-error">{{ error }}</p>
+          {% endfor %}
+            {% if entry.overridden %}
+            <p class="muted module-detail">
+              Current configuration has been changed from defaults
+            </p>
+            {% endif %}
+          <form class="module-config-form" method="post" action="{{ url_for('admin.module_config_save', module_id=mid) }}">
+            {{ csrf_input() }}
+            <div class="module-field">
+              <label for="prefix-{{ mid }}">Base URI</label>
+              <input type="text" id="prefix-{{ mid }}" name="path_prefix" value="{{ entry.path_prefix or '' }}" placeholder="{{ entry.shipped_prefix }}">
+            </div>
+            <div class="module-field">
+              <label for="host-{{ mid }}">Host</label>
+              <input type="text" id="host-{{ mid }}" name="host" value="{{ entry.host or '' }}" placeholder="{{ entry.shipped_host or 'any host' }}">
+            </div>
+            <label class="muted" for="config-{{ mid }}">Routes (JSON)</label>
+            <div class="module-config-editor-wrap">
+              <div class="module-config-gutter" aria-hidden="true"></div>
+              <textarea id="config-{{ mid }}" name="routes_json" class="module-config-editor" rows="18" spellcheck="false">{{ entry.routes_text }}</textarea>
+            </div>
+            <label class="muted" for="error-pages-{{ mid }}">Error pages (JSON)</label>
+            <div class="module-config-editor-wrap">
+              <div class="module-config-gutter" aria-hidden="true"></div>
+              <textarea id="error-pages-{{ mid }}" name="error_pages_json" class="module-config-editor" rows="6" spellcheck="false">{{ entry.error_pages_text }}</textarea>
+            </div>
+            <div class="module-config-actions">
+              <button type="submit" class="primary">Save & Reload</button>
+            </div>
+          </form>
+          <form class="module-config-form" method="post" action="{{ url_for('admin.module_reset', module_id=mid) }}">
+            {{ csrf_input() }}
+            <button type="submit" class="{% if entry.overridden %}danger{% endif %}" {% if not entry.overridden %}disabled{% endif %}>Reset to Defaults</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No module types discovered.</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h2 class="config-toggle">Configuration</h2>
+  <div class="config-panel-content" id="config-panel-content">
+    <form method="post" action="{{ url_for('admin.config_save') }}" class="infra-config-form">
+      {{ csrf_input() }}
+      <div class="infra-config-grid">
+        <div class="infra-config-col">
+          <p class="infra-row infra-row-inline">
+            <span class="infra-checkbox-label">Use IAM role</span>
+            <label class="switch">
+              <input type="checkbox" name="use_iam_role" {% if runtime.aws.use_iam_role %}checked{% endif %}>
+              <span class="slider"></span>
+            </label>
+          </p>
+          <p class="infra-row">
+            <label for="aws_access_key_id">AWS Access Key ID</label>
+            <input type="text" id="aws_access_key_id" name="aws_access_key_id" value="{{ runtime.aws.access_key_id or '' }}" {% if runtime.aws.use_iam_role %}disabled{% endif %}>
+          </p>
+          <p class="infra-row">
+            <label for="aws_secret_access_key">AWS Secret Access Key</label>
+            <input type="password" id="aws_secret_access_key" name="aws_secret_access_key" placeholder="{% if runtime.aws.secret_access_key %}*********************{% endif %}">
+          </p>
+          <p class="infra-form-actions">
+            <button type="submit" class="primary">Save</button>
+          </p>
+        </div>
+        <div class="infra-config-col">
+          <p class="infra-row">
+            <label for="target_host">Target IP / Hostname</label>
+            <input type="text" id="target_host" name="target_host" value="{{ runtime.aws.target_host or '' }}">
+          </p>
+          <p class="infra-row infra-row-inline">
+            <span class="infra-checkbox-label">Create DNS Records</span>
+            <label class="switch">
+              <input type="checkbox" name="create_dns_records" {% if runtime.features.create_dns_records %}checked{% endif %}>
+              <span class="slider"></span>
+            </label>
+          </p>
+          <p class="infra-row infra-row-inline">
+            <span class="infra-checkbox-label">Create Certificates</span>
+            <label class="switch">
+              <input type="checkbox" name="create_certificates" {% if runtime.features.create_certificates %}checked{% endif %}>
+              <span class="slider"></span>
+            </label>
+          </p>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Dashboard Log Panel -->
+<div class="panel">
+  <h2 class="config-toggle log-toggle">Mimic Logs</h2>
+  <div class="log-panel-content" id="log-panel-content">
+    <div class="body-pre-wrap">
+      <button type="button" class="btn copy-btn pre-copy" id="copy-log-output" title="Copy" aria-label="Copy"><i class="icon icon-copy"></i></button>
+      <pre id="log-output" class="log-output"></pre>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Collapsible configuration panel styles */
+.config-panel-content { transition: max-height 0.3s ease, opacity 0.3s ease; overflow: hidden; }
+.config-panel-content.collapsed { max-height: 0; opacity: 0; padding: 0; }
+.panel > h2.config-toggle { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
+.panel > h2.config-toggle::after { content: "▾"; display: inline-block; opacity: 0.4; font-size: 1.275rem; transition: transform 0.3s ease, opacity 0.3s ease; }
+.panel > h2.config-toggle.collapsed::after { content: "▸"; }
+.panel > h2.config-toggle:hover::after { opacity: 0.7; }
+
+tr.row-warn td { border-left: 3px solid var(--danger, #f85149); }
+.module-toggle { margin: 0; }
+.switch { position: relative; display: inline-block; width: 2.5rem; height: 1.35rem; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; inset: 0; background: #3a4556; border-radius: 1.35rem; transition: background 0.2s ease; }
+.slider::before { content: ""; position: absolute; height: 1rem; width: 1rem; left: 0.2rem; bottom: 0.175rem; background: #e6edf3; border-radius: 50%; transition: transform 0.2s ease; }
+.switch input:checked + .slider { background: #1f6feb; }
+.switch input:checked + .slider::before { transform: translateX(1.1rem); }
+
+.load-error { color: var(--danger); margin: 0 0 0.75rem; }
+#module-table tbody tr.module-row { cursor: pointer; }
+#module-table tbody tr.module-row:hover { background: rgba(61, 139, 253, 0.06); }
+#module-table tbody tr.module-row td.module-cell-trigger:last-child::after { content: "▸"; float: right; opacity: 0.35; font-size: 1.275rem; transition: opacity 0.2s ease; }
+#module-table tbody tr.module-row:hover td.module-cell-trigger:last-child::after { opacity: 0.55; }
+#module-table tbody tr.module-row.expanded td.module-cell-trigger:last-child::after { content: "▾"; opacity: 0.7; }
+#module-table tbody tr.module-row-detail td { padding: 0; border-top: none; }
+.module-detail-cell { padding: 0.75rem 1rem 1rem !important; border-top: 1px solid var(--border); }
+.module-config-form { margin: 0; }
+.module-config-form + .module-config-form { margin-top: 0.75rem; }
+.module-config-form label { display: block; margin-bottom: 0.35rem; }
+.module-config-editor-wrap { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: #1a1a1a; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03); }
+.module-config-editor-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 0.25rem rgba(0, 120, 212, 0.16); }
+.module-config-gutter { flex: 0 0 auto; min-width: 2.5rem; padding: 0.75rem 0.5rem 0.75rem 0.75rem; text-align: right; color: rgba(154, 154, 154, 0.78); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.8rem; line-height: 1.45; user-select: none; border-right: 1px solid var(--border); overflow: hidden; white-space: pre; }
+.module-config-editor { display: block; flex: 1 1 auto; width: 100%; min-height: 12rem; padding: 0.75rem; border: none; border-radius: 0; background: #1b1b1b; color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.8rem; line-height: 1.45; resize: vertical; outline: none; }
+.module-config-editor:focus { outline: none; }
+.module-config-actions { margin-top: 0.65rem; }
+.module-config-actions button, .module-config-form + .module-config-form button { width: 10rem; }
+.module-detail { margin: 0 0 0.75rem; }
+.module-field { margin-bottom: 0.75rem; }
+.module-field input { width: 100%; box-sizing: border-box; }
+
+/* Config form styles */
+.infra-config-form { display: grid; grid-template-columns: 1fr; gap: 0; }
+.infra-config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.infra-config-col { display: flex; flex-direction: column; gap: 0.75rem; min-height: 1px; }
+.infra-form-actions { margin-top: auto; }
+.infra-checkbox-label { display: flex; flex: .4; }
+.infra-config-form .infra-row { display: flex; flex-direction: column; gap: 0.35rem; margin: 0; }
+.infra-config-form .infra-row-inline { flex-direction: row; align-items: center; justify-content: flex-start; }
+.infra-config-form label { display: block; }
+.infra-config-form input[type="text"], .infra-config-form input[type="password"] { width: 100%; box-sizing: border-box; }
+.infra-config-form .switch { margin-right: 0.5rem; }
+.infra-config-form p { margin-bottom: 0.75rem; }
+.infra-form-actions { margin-top: 1rem; }
+
+/* Log Output panel styles */
+.log-panel-content { transition: max-height 0.3s ease, opacity 0.3s ease; overflow: hidden; }
+.log-panel-content.collapsed { max-height: 0; opacity: 0; padding: 0; }
+.log-output { background: #0d1117; color: #9a9a9a; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.8rem; line-height: 1.5; padding: 0.75rem 1rem; margin: 0; border-radius: 6px; border: 1px solid var(--border); height: 24rem; min-height: 24rem; resize: vertical; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+.log-output::-webkit-scrollbar { width: 6px; }
+.log-output::-webkit-scrollbar-track { background: transparent; }
+.log-output::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+.log-output::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+.panel > h2.log-toggle { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
+.panel > h2.log-toggle::after { content: "▾"; display: inline-block; opacity: 0.4; font-size: 1.275rem; transition: transform 0.3s ease, opacity 0.3s ease; }
+.panel > h2.log-toggle.collapsed::after { content: "▸"; }
+.panel > h2.log-toggle:hover::after { opacity: 0.7; }
+
+/* Log level colors */
+.log-info   { color: #9a9a9a; }
+.log-debug   { color: #9b3b9b; }
+.log-warning { color: #ff9800; }
+.log-error   { color: #f85149; }
+</style>
+
+<script>
+// 1. Config Editor Line Numbers & Tab Handling
+(function () {
+  function initConfigEditor(wrap) {
+    const gutter = wrap.querySelector(".module-config-gutter");
+    const textarea = wrap.querySelector(".module-config-editor");
+    if (!gutter || !textarea) return;
+
+    function updateLines() {
+      const lineCount = textarea.value.split("\n").length;
+      gutter.textContent = Array.from({ length: lineCount }, (_, i) => i + 1).join("\n");
+    }
+
+    function syncScroll() { gutter.scrollTop = textarea.scrollTop; }
+
+    textarea.addEventListener("input", updateLines);
+    textarea.addEventListener("scroll", syncScroll);
+    textarea.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Tab") return;
+      ev.preventDefault();
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const value = textarea.value;
+
+      if (ev.shiftKey) {
+        const selected = value.substring(start, end);
+        if (selected.indexOf("\n") !== -1) {
+          const lines = selected.split("\n");
+          let changed = false;
+          const result = lines.map(line => {
+            if (line.startsWith("\t")) { changed = true; return line.substring(1); }
+            return line;
+          });
+          if (changed) {
+            textarea.value = value.substring(0, start) + result.join("\n") + value.substring(end);
+            textarea.selectionStart = start;
+            textarea.selectionEnd = start + result.join("\n").length;
+            updateLines();
+            return;
+          }
+        }
+        if (start > 0 && value[start - 1] === "\t") {
+          textarea.value = value.substring(0, start - 1) + value.substring(end);
+          textarea.selectionStart = textarea.selectionEnd = start - 1;
+          updateLines();
+        }
+      } else {
+        textarea.value = value.substring(0, start) + "\t" + value.substring(end);
+        textarea.selectionStart = textarea.selectionEnd = start + 1;
+        updateLines();
+      }
+    });
+    updateLines();
+  }
+
+  document.querySelectorAll(".module-config-editor-wrap").forEach(initConfigEditor);
+
+  // Module table row expansion
+  const table = document.getElementById("module-table");
+  if (table) {
+    table.addEventListener("click", function (ev) {
+      if (ev.target.closest(".module-toggle, .module-config-form, .module-config-editor-wrap, .infra-config-form")) return;
+      const row = ev.target.closest("tr.module-row");
+      if (!row || !table.contains(row)) return;
+      const detailRow = row.nextElementSibling;
+      if (!detailRow || !detailRow.classList.contains("module-row-detail")) return;
+      const isHidden = detailRow.hidden;
+      detailRow.hidden = !isHidden;
+      row.classList.toggle("expanded", isHidden);
+    });
+  }
+
+  // AWS config toggle
+  const useIamRoleCheckbox = document.querySelector('input[name="use_iam_role"]');
+  const awsAccessKeyIdInput = document.getElementById('aws_access_key_id');
+  const awsSecretAccessKeyInput = document.getElementById('aws_secret_access_key');
+  if (useIamRoleCheckbox) {
+    const toggleAwsInputs = () => {
+      const disabled = useIamRoleCheckbox.checked;
+      awsAccessKeyIdInput.disabled = disabled;
+      awsSecretAccessKeyInput.disabled = disabled;
+    };
+    useIamRoleCheckbox.addEventListener('change', toggleAwsInputs);
+    toggleAwsInputs(); // Initialize state
+  }
+})();
+
+// 2. Config Panel Collapse Toggle
+(function () {
+  const configPanel = document.getElementById('config-panel-content');
+  if (configPanel) {
+    const panelHeading = configPanel.closest('.panel').querySelector('h2.config-toggle');
+    if (panelHeading) {
+      panelHeading.addEventListener('click', function(e) {
+        if (e.target.closest('form') || e.target.closest('.switch')) return;
+        configPanel.classList.toggle('collapsed');
+        panelHeading.classList.toggle('collapsed');
+      });
+    }
+  }
+})();
+
+// 3. Log Output & SSE Connection
+(function () {
+  const logOutput = document.getElementById('log-output');
+  const logPanelContent = document.getElementById('log-panel-content');
+  const logToggle = document.querySelector('h2.log-toggle');
+
+  if (!logOutput) return;
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Global appendLog function — callable from anywhere in the page
+  window.appendLog = function (message) {
+    // [\s\S]* matches ANY character including newlines, fixing the multiline cutoff issue
+    const match = message.match(/^\[(.*?)\] \[(INFO|DEBUG|WARNING|ERROR)\] ([\s\S]*)/);
+
+    if (match) {
+      const timestamp = match[1];
+      const level = match[2];
+      let content = match[3];
+      
+      let colorClass = 'log-info'; // default fallback
+      switch (level) {
+        case 'DEBUG': colorClass = 'log-debug'; break;
+        case 'WARNING': colorClass = 'log-warning'; break;
+        case 'ERROR':   colorClass = 'log-error'; break;
+      }
+
+      // Log content is attacker-controlled (request paths, headers, module ids):
+      // escape before it goes anywhere near insertAdjacentHTML.
+      const formattedContent = escapeHtml(content).replace(/\n/g, '<br>');
+
+      logOutput.insertAdjacentHTML('beforeend',
+        `<span class="${colorClass}">[${escapeHtml(timestamp)}] [${level}] ${formattedContent}</span><br>`
+      );
+    } else {
+      logOutput.insertAdjacentHTML('beforeend', escapeHtml(message) + '\n');
+    }
+
+    // Auto-scroll to bottom
+    logOutput.scrollTop = logOutput.scrollHeight;
+  };
+
+  // Collapsible toggle for Log Output header
+  if (logToggle && logPanelContent) {
+    logToggle.addEventListener('click', function (e) {
+      if (e.target.closest('form') || e.target.closest('.switch')) return;
+      logPanelContent.classList.toggle('collapsed');
+      logToggle.classList.toggle('collapsed');
+    });
+  }
+
+  const copyLogBtn = document.getElementById('copy-log-output');
+  if (copyLogBtn) {
+    copyLogBtn.addEventListener('click', function () {
+      window.copyToClipboard(logOutput.textContent, copyLogBtn);
+    });
+  }
+
+  // Live app-log updates. The broker pushes; there is no polling timer.
+  if (typeof EventSource !== 'undefined') {
+    const sse = window.mimicEvents || (window.mimicEvents = new EventSource('/admin/events'));
+    sse.addEventListener('applog', function (ev) {
+      try {
+        const entry = JSON.parse(ev.data);
+        window.appendLog(entry.text);
+      } catch (_) {
+        window.appendLog(ev.data);
+      }
+    });
+    sse.addEventListener('resync', function () {
+      window.appendLog('[log stream fell behind; reload to catch up]');
+    });
+    sse.onerror = function (err) {
+      console.error('SSE connection error:', err);
+    };
+  }
+})();
+</script>
+{% endblock %}

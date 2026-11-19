@@ -1,0 +1,651 @@
+  :root {
+      --editor-background: #1e1e1e;
+      --editor-foreground: #d4d4d4;
+      --editor-border: #3c3c3c;
+      --panel-background: #252526;
+      --panel-border: #3c3c3c;
+      --text-muted: #9a9a9a;
+      --accent-blue: #0078d4;
+      --danger-red: #f85149;
+      --error-red: #f85149;
+      --info-blue: #0078d4;
+      --success-green: #237029;
+      --warning-orange: #d7972e;
+      --table-header-bg: #1e1e1e;
+      --table-row-hover: rgba(90, 130, 255, 0.12);
+      --code-background: #1b1b1b;
+      --input-background: #1e1e1e;
+      --input-border: #3c3c3c;
+      --button-background: #2d2d2d;
+      --button-border: #3c3c3c;
+      --button-hover: #3a3a3a;
+      --border: var(--editor-border);
+      --panel: var(--panel-background);
+      --accent: var(--accent-blue);
+      --muted: var(--text-muted);
+      --text: var(--editor-foreground);
+  }
+
+  * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+  }
+
+  body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: var(--editor-background);
+      color: var(--editor-foreground);
+      line-height: 1.5;
+  }
+
+  a {
+      color: var(--accent-blue);
+      text-decoration: none;
+  }
+
+  a:hover {
+      text-decoration: underline;
+  }
+
+  header {
+      background: var(--panel-background);
+      border-bottom: 1px solid var(--panel-border);
+      padding: 0.75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+  }
+
+  header .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+  }
+
+  header nav {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+  }
+
+  main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.25rem;
+  }
+
+  .muted {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+      margin-top: 0.5rem;
+  }
+
+  .panel {
+      background: var(--panel-background);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  }
+
+  table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      background: transparent;
+  }
+
+  thead th {
+      background: rgba(255, 255, 255, 0.04);
+  }
+
+  tbody tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.02);
+  }
+
+  h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0 0 0.5rem;
+  }
+
+  h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      /* margin: 0 0 0.75rem; */
+  }
+
+  table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+  }
+
+  th,
+  td {
+      text-align: left;
+      padding: 0.75rem 0.6rem;
+      border-bottom: 1px solid var(--editor-border);
+      vertical-align: middle;
+  }
+
+  th {
+      color: var(--text-muted);
+      font-weight: 500;
+  }
+
+  code,
+  pre {
+      font-family: "Consolas", "Monaco", "Andale Mono", "Ubuntu Mono", monospace;
+      font-size: 0.875rem;
+  }
+
+  pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--code-background);
+      padding: 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--editor-border);
+      resize: vertical;
+      overflow: auto;
+      color: var(--editor-foreground);
+  }
+
+  .body-pre-wrap {
+      position: relative;
+  }
+
+  .copy-btn {
+      padding: 0.15rem 0.5rem;
+      font-size: 0.75rem;
+  }
+
+  .pre-copy {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+  }
+
+  /* Hover the wrap, not the pre: the button overlaps the pre's corner as a
+     sibling, so pre:hover would hide it the moment the mouse lands on it. */
+  .body-pre-wrap:hover .pre-copy,
+  .body-pre-wrap:focus-within .pre-copy {
+      opacity: 1;
+  }
+
+  /* Icons.css v0.1.0 (MIT, github.com/picturepan2/icons.css) — extracted rules */
+  .icon {
+      box-sizing: border-box;
+      display: inline-block;
+      font-size: inherit;
+      font-style: normal;
+      height: 1em;
+      position: relative;
+      text-indent: -9999px;
+      vertical-align: middle;
+      width: 1em;
+  }
+
+  .icon::before,
+  .icon::after {
+      content: "";
+      display: block;
+      left: 50%;
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+  }
+
+  .icon-copy::before {
+      border: .1rem solid currentColor;
+      border-bottom-color: transparent;
+      border-radius: .1em;
+      border-right-color: transparent;
+      height: .8em;
+      left: 40%;
+      top: 40%;
+      width: .7em;
+  }
+
+  .icon-copy::after {
+      border: .1rem solid currentColor;
+      border-radius: .1em;
+      height: .8em;
+      left: 60%;
+      top: 60%;
+      width: .7em;
+  }
+
+  .icon-check::before {
+      border: .1rem solid currentColor;
+      border-right: 0;
+      border-top: 0;
+      height: .5em;
+      transform: translate(-50%, -.375em) rotate(-45deg);
+      width: .9em;
+  }
+
+  .copy-btn .icon {
+      font-size: 1rem;
+  }
+
+  input[type="password"],
+  input[type="text"],
+  select {
+      width: 100%;
+      max-width: 320px;
+      padding: 0.5rem 0.65rem;
+      border-radius: 4px;
+      border: 1px solid var(--input-border);
+      background: var(--input-background);
+      color: var(--editor-foreground);
+      font-family: "Consolas", "Monaco", "Andale Mono", "Ubuntu Mono", monospace;
+      font-size: 0.875rem;
+  }
+
+  button,
+  .btn {
+      display: inline-block;
+      padding: 0.45rem 0.85rem;
+      border-radius: 4px;
+      border: 1px solid var(--button-border);
+      background: var(--button-background);
+      color: var(--editor-foreground);
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+      text-decoration: none;
+  }
+
+  button:hover,
+  .btn:hover {
+      background: var(--button-hover);
+      border-color: #4d4d4d;
+  }
+
+  button.primary,
+  .btn.primary {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: #ffffff;
+  }
+
+  button.primary:hover,
+  .btn.primary:hover {
+      background: #005a9e;
+      border-color: #005a9e;
+  }
+
+  button.danger {
+      border-color: var(--danger-red);
+      color: var(--danger-red);
+      background: transparent;
+  }
+
+  button.danger:hover {
+      background: rgba(248, 81, 73, 0.1);
+  }
+
+  button:disabled,
+  .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+  }
+
+  button:disabled:hover,
+  .btn:disabled:hover {
+      background: var(--button-background);
+      border-color: var(--button-border);
+  }
+
+  /* Switch styles for config and module toggles */
+  .switch {
+      position: relative;
+      display: inline-block;
+      width: 2.5rem;
+      height: 1.35rem;
+  }
+
+  .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+  }
+
+  .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: #3a4556;
+      border-radius: 1.35rem;
+      transition: background 0.2s ease;
+  }
+
+  .slider::before {
+      content: "";
+      position: absolute;
+      height: 1rem;
+      width: 1rem;
+      left: 0.2rem;
+      bottom: 0.175rem;
+      background: #e6edf3;
+      border-radius: 50%;
+      transition: transform 0.2s ease;
+  }
+
+  .switch input:checked+.slider {
+      background: #1f6feb;
+  }
+
+  .switch input:checked+.slider::before {
+      transform: translateX(1.1rem);
+  }
+
+  /* Enhanced flash messages */
+  .flash {
+      padding: 0.65rem 0.85rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+      background: var(--success-green);
+      border-color: var(--success-green);
+      color: #ffffff;
+  }
+
+  .flash-error {
+      border-color: var(--danger-red);
+      color: #ffffff;
+      background-color: var(--danger-red);
+  }
+
+  .error {
+      color: var(--danger-red);
+  }
+
+  ul.compact {
+      margin: 0.25rem 0 0;
+      padding-left: 1.25rem;
+  }
+
+  ul.compact li {
+      margin: 0.15rem 0;
+  }
+
+  /* Fixed layout keeps the table at container width: with auto layout a long
+     unbreakable path would stretch the Path column past the page. The short
+     columns get explicit widths; Path absorbs the remainder and ellipsizes. */
+  #log-table {
+      table-layout: fixed;
+  }
+
+  #log-table thead th:nth-child(1) {
+      width: 190px; /* Time */
+  }
+
+  #log-table thead th:nth-child(2) {
+      width: 90px; /* Method */
+  }
+
+  #log-table thead th:nth-child(4) {
+      width: 140px; /* Module */
+  }
+
+  #log-table thead th:nth-child(5) {
+      width: 70px; /* Status */
+  }
+
+  /* Log table styling */
+  #log-table tbody tr.log-row {
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+  }
+
+  #log-table tbody tr.log-row:hover {
+      background: var(--table-row-hover);
+  }
+
+  #log-table .log-details summary {
+      cursor: pointer;
+      user-select: none;
+      padding: 0.5rem 1rem;
+      font-weight: 500;
+      color: var(--editor-foreground);
+  }
+
+  #log-table .log-details summary:focus {
+      outline: none;
+  }
+
+  #log-table tbody tr.log-row-detail td {
+      padding: 1rem 0.6rem;
+      border-top: none;
+  }
+
+  #log-table .log-row-detail .log-details {
+      margin: 0;
+      background: var(--code-background);
+      border: 1px solid var(--editor-border);
+      border-radius: 0.5rem;
+      padding: 0.75rem 1rem 1rem;
+  }
+
+  #log-table .log-row-detail .log-details summary {
+      display: block;
+      background: transparent;
+      margin: 0 -1rem 0;
+      padding: 0.75rem 1rem 0.75rem;
+      font-weight: 600;
+      color: var(--editor-foreground);
+      border-bottom: 1px solid var(--editor-border);
+  }
+
+  #log-table .log-row-detail .log-details summary::-webkit-details-marker {
+      display: none;
+  }
+
+  #log-table .log-row-detail .log-details p {
+      margin: 0.75rem 0 0.5rem;
+      color: var(--editor-foreground);
+      vertical-align: middle;
+  }
+
+  .log-detail-cell p.muted {
+      margin: 0.75rem 0 0.5rem;
+      vertical-align: middle;
+  }
+
+  .log-detail-cell .error {
+      display: block;
+      padding: 0.5rem 0;
+      vertical-align: middle;
+  }
+
+  /* The full path in the expanded row wraps instead of stretching the table. */
+  #log-table .log-row-detail code.full-path {
+      display: block;
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: break-word;
+  }
+
+  #log-table .log-row-detail .log-details pre {
+      background: var(--code-background);
+      border: 1px solid var(--editor-border);
+      border-radius: 0.35rem;
+      margin: 0.75rem 0 1rem;
+      padding: 0.75rem;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--editor-foreground);
+      vertical-align: middle;
+  }
+
+  #log-table .log-row-detail pre {
+      margin: 0.75rem 0 1rem;
+      vertical-align: middle;
+  }
+
+  #log-table tbody tr.log-row td.log-cell-trigger {
+      position: relative;
+      vertical-align: middle;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+  }
+
+  #log-table tbody tr.log-row td.log-cell-trigger:last-child::after {
+      content: "▸";
+      position: absolute;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      opacity: 0.28;
+      font-size: 0.9rem;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+
+  #log-table tbody tr.log-row:hover td.log-cell-trigger:last-child::after {
+      opacity: 0.52;
+  }
+
+  #log-table tbody tr.log-row.expanded td.log-cell-trigger:last-child::after {
+      content: "▾";
+      opacity: 0.65;
+  }
+
+  #headers-table,
+  .headers-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.5rem 0 1rem;
+      table-layout: auto;
+  }
+
+  #headers-table tbody tr td,
+  .headers-table tbody tr td {
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--editor-border);
+      border-right: none;
+      border-left: none;
+      border-top: none;
+      vertical-align: middle;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      white-space: normal;
+  }
+
+  #headers-table tbody tr td:first-child,
+  .headers-table tbody tr td:first-child {
+      font-weight: 600;
+      white-space: nowrap;
+      width: 200px;
+      min-width: 200px;
+  }
+
+  #headers-table tbody tr td:last-child,
+  .headers-table tbody tr td:last-child {
+      width: auto;
+      white-space: normal;
+  }
+
+  #headers-table tbody tr:last-child td,
+  .headers-table tbody tr:last-child td {
+      border-bottom: none;
+  }
+
+  /* Module table styling to match VS Code */
+  #module-table tbody tr.module-row {
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+  }
+
+  #module-table tbody tr.module-row:hover {
+      background: var(--table-row-hover);
+  }
+
+  #module-table tbody tr.module-row td.module-cell-trigger:last-child::after {
+      content: "▸";
+      float: right;
+      opacity: 0.35;
+      font-size: 0.9rem;
+      transition: opacity 0.2s ease;
+  }
+
+  #module-table tbody tr.module-row:hover td.module-cell-trigger:last-child::after {
+      opacity: 0.55;
+  }
+
+  #module-table tbody tr.module-row.expanded td.module-cell-trigger:last-child::after {
+      content: "▾";
+      opacity: 0.7;
+  }
+
+  #module-table tbody tr.module-row-detail td {
+      padding: 0;
+      border-top: none;
+  }
+
+  /* Enhanced form styling */
+  input[type="password"],
+  input[type="text"] {
+      width: 100%;
+      max-width: 320px;
+      padding: 0.5rem 0.65rem;
+      border-radius: 4px;
+      border: 1px solid var(--input-border);
+      background: var(--input-background);
+      color: var(--editor-foreground);
+      font-family: "Consolas", "Monaco", "Andale Mono", "Ubuntu Mono", monospace;
+      font-size: 0.875rem;
+  }
+
+  /* Enhanced button styling */
+  button,
+  .btn {
+      display: inline-block;
+      padding: 0.45rem 0.85rem;
+      border-radius: 4px;
+      border: 1px solid var(--button-border);
+      background: var(--button-background);
+      color: var(--editor-foreground);
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+  }
+
+  button:hover,
+  .btn:hover {
+      background: var(--button-hover);
+      border-color: #4d4d4d;
+  }
+
+  button.primary,
+  .btn.primary {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: #ffffff;
+  }
+
+  button.primary:hover,
+  .btn.primary:hover {
+      background: #005a9e;
+      border-color: #005a9e;
+  }
+
+  button.danger {
+      border-color: var(--danger-red);
+      color: var(--danger-red);
+      background: transparent;
+  }
+
+  button.danger:hover {
+      background: rgba(248, 81, 73, 0.1);
+  }

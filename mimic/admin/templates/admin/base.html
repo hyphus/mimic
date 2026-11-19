@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Mimic{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('admin.static', filename='css/style.css') }}">
+  <script defer src="{{ url_for('admin.static', filename='js/main.js') }}"></script>
+
+  {% block head %}{% endblock %}
+</head>
+
+<body>
+  <header>
+    <span class="brand">
+      <img src="{{ url_for('admin.static', filename='img/mimic.png') }}" alt="" width="28" height="28">
+      <strong>Mimic</strong>
+    </span>
+    {% if session.get('mimic_admin') %}
+    <nav>
+      <a href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+      <a href="{{ url_for('admin.logs') }}">Request log</a>
+      <form action="{{ url_for('admin.logout') }}" method="post" style="display: inline">
+        {{ csrf_input() }}
+        <button type="submit" class="btn">Sign out</button>
+      </form>
+    </nav>
+    {% endif %}
+  </header>
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="flash{% if category == 'error' %} flash-error{% endif %}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+    {% block body %}{% endblock %}
+  </main>
+</body>
+
+</html>

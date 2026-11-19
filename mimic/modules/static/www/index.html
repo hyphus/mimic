@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Mimic Static Module</title>
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    <h1>Mimic static module</h1>
+    <p>This page is served from the module's own directory: <code>www/index.html</code>.</p>
+    <ul>
+        <li><a href="/static/app.js">app.js</a></li>
+        <li><a href="/static/data.json">data.json</a></li>
+        <li><a href="/static/docs/guide.html">docs/guide.html (a deep path)</a></li>
+        <li><a href="/static/download">download (Content-Disposition: attachment)</a></li>
+    </ul>
+    <pre id="data"></pre>
+</body>
+</html>

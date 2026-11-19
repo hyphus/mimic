@@ -1,0 +1,88 @@
+{
+    "kind": "manifest",
+    "title": "HTTP Bin",
+    "description": "HTTP Bin style request/response module",
+    "default_enabled": false,
+    "default_prefix": "/httpbin/",
+    "max_concurrent": 4,
+    "strict_slashes": true,
+    "default_methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "HEAD"
+    ],
+    "routes": [
+        {
+            "uri": "",
+            "handler": "root"
+        },
+        {
+            "uri": "get",
+            "methods": [
+                "GET"
+            ],
+            "handler": "echo"
+        },
+        {
+            "uri": "post",
+            "methods": [
+                "POST"
+            ],
+            "handler": "echo"
+        },
+        {
+            "uri": "put",
+            "methods": [
+                "PUT"
+            ],
+            "handler": "echo"
+        },
+        {
+            "uri": "patch",
+            "methods": [
+                "PATCH"
+            ],
+            "handler": "echo"
+        },
+        {
+            "uri": "delete",
+            "methods": [
+                "DELETE"
+            ],
+            "handler": "echo"
+        },
+        {
+            "uri": "options",
+            "methods": [
+                "OPTIONS"
+            ],
+            "handler": "echo"
+        },
+        {
+            "uri": "head",
+            "methods": [
+                "HEAD"
+            ],
+            "handler": "echo"
+        },
+        {
+            "uri": "status/<int:code>",
+            "handler": "status"
+        },
+        {
+            "uri": "delay/<int:seconds>",
+            "handler": "delay"
+        },
+        {
+            "uri": "uuid",
+            "methods": [
+                "GET"
+            ],
+            "handler": "uuid"
+        }
+    ]
+}

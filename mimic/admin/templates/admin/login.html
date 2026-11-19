@@ -1,0 +1,23 @@
+{% extends "admin/base.html" %}
+{% block title %}Sign in · Mimic{% endblock %}
+{% block head %}
+<style>
+.login-form p { margin-bottom: 0.75rem; }
+.login-form label { display: block; margin-bottom: 0.35rem; }
+</style>
+{% endblock %}
+{% block body %}
+<h1>Management portal</h1>
+<p class="muted">Sign in with the configured admin password.</p>
+{% if error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+<form class="login-form" method="post" action="{{ url_for('admin.login', next=request.args.get('next','')) }}">
+  {{ csrf_input() }}
+  <p>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required />
+  </p>
+  <p><button type="submit" class="btn primary">Sign in</button></p>
+</form>
+{% endblock %}

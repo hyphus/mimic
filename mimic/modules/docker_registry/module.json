@@ -1,0 +1,294 @@
+{
+    "kind": "manifest",
+    "title": "Docker Registry (v2 API)",
+    "description": "Stub registry API for /v2 with configurable catalog, manifests, tags, and blobs.",
+    "default_enabled": false,
+    "default_prefix": "/v2/",
+    "max_concurrent": 4,
+    "strict_slashes": true,
+    "default_methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "HEAD"
+    ],
+    "default_response": {
+        "passthrough": false,
+        "headers": {
+            "Content-Type": "application/json"
+        },
+        "status": 200,
+        "body": {}
+    },
+    "routes": [
+        {
+            "uri": "",
+            "methods": [
+                "GET"
+            ],
+            "responses": [
+                {
+                    "match": {
+                        "method": "GET"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 200,
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "Docker-Distribution-Api-Version": "registry/2.0"
+                        },
+                        "body": {}
+                    }
+                }
+            ]
+        },
+        {
+            "uri": "_catalog",
+            "methods": [
+                "GET"
+            ],
+            "responses": [
+                {
+                    "match": {
+                        "method": "GET"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 200,
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": {
+                            "repositories": [
+                                "library/ubuntu"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "uri": "<path:name>/tags/list",
+            "methods": [
+                "GET"
+            ],
+            "responses": [
+                {
+                    "match": {
+                        "method": "GET",
+                        "name": "library/ubuntu"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 200,
+                        "headers": {
+                            "Content-Type": "application/json"
+                        },
+                        "body": {
+                            "name": "library/ubuntu",
+                            "tags": [
+                                "latest",
+                                "24.04",
+                                "22.04",
+                                "20.04"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "uri": "<path:name>/manifests/<reference>",
+            "methods": [
+                "GET",
+                "HEAD",
+                "PUT"
+            ],
+            "responses": [
+                {
+                    "match": {
+                        "method": "GET",
+                        "name": "library/ubuntu"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 200,
+                        "headers": {
+                            "Content-Type": "application/vnd.docker.distribution.manifest.v2+json",
+                            "Docker-Content-Digest": "sha256:8f1d3d6c4d91f43fd7d85b8dbd4f2e9f4c1d64d8a0b1b6f6b7b5d4e3c2a1f987"
+                        },
+                        "body": {
+                            "schemaVersion": 2,
+                            "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+                            "config": {
+                                "mediaType": "application/vnd.docker.container.image.v1+json",
+                                "size": 7421,
+                                "digest": "sha256:3c8c2b8f4d91aa11556677889900aabbccddeeff00112233445566778899aabb"
+                            },
+                            "layers": [
+                                {
+                                    "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                                    "size": 29543210,
+                                    "digest": "sha256:a1b2c3d4e5f60123456789abcdef0123456789abcdef0123456789abcdef0123"
+                                },
+                                {
+                                    "mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+                                    "size": 1845123,
+                                    "digest": "sha256:b2c3d4e5f60123456789abcdef0123456789abcdef0123456789abcdef012345"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "match": {
+                        "method": "HEAD"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 200,
+                        "headers": {
+                            "Docker-Content-Digest": "sha256:8f1d3d6c4d91f43fd7d85b8dbd4f2e9f4c1d64d8a0b1b6f6b7b5d4e3c2a1f987"
+                        }
+                    }
+                },
+                {
+                    "match": {
+                        "method": "PUT"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 201,
+                        "headers": {
+                            "Location": "/v2/library/ubuntu/manifests/sha256:8f1d3d6c4d91f43fd7d85b8dbd4f2e9f4c1d64d8a0b1b6f6b7b5d4e3c2a1f987",
+                            "Docker-Content-Digest": "sha256:8f1d3d6c4d91f43fd7d85b8dbd4f2e9f4c1d64d8a0b1b6f6b7b5d4e3c2a1f987"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "uri": "<path:name>/blobs/uploads/",
+            "methods": [
+                "POST"
+            ],
+            "responses": [
+                {
+                    "match": {
+                        "method": "POST"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 202,
+                        "headers": {
+                            "Location": "/v2/library/ubuntu/blobs/uploads/7d9b3d0d-4b77-4a5b-a564-c4b6a5c7d9e1",
+                            "Range": "0-0"
+                        },
+                        "body": {
+                            "location": "/v2/library/ubuntu/blobs/uploads/7d9b3d0d-4b77-4a5b-a564-c4b6a5c7d9e1",
+                            "range": "0-0"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "uri": "<path:name>/blobs/uploads/<uuid>",
+            "methods": [
+                "GET",
+                "PATCH",
+                "PUT"
+            ],
+            "responses": [
+                {
+                    "match": {
+                        "method": "GET"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 202,
+                        "headers": {
+                            "Location": "/v2/library/ubuntu/blobs/uploads/7d9b3d0d-4b77-4a5b-a564-c4b6a5c7d9e1",
+                            "Range": "0-1048575"
+                        },
+                        "body": {
+                            "location": "/v2/library/ubuntu/blobs/uploads/7d9b3d0d-4b77-4a5b-a564-c4b6a5c7d9e1",
+                            "range": "0-1048576"
+                        }
+                    }
+                },
+                {
+                    "match": {
+                        "method": "PATCH"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 202,
+                        "headers": {
+                            "Location": "/v2/library/ubuntu/blobs/uploads/7d9b3d0d-4b77-4a5b-a564-c4b6a5c7d9e1",
+                            "Range": "0-1048575"
+                        },
+                        "body": {
+                            "location": "/v2/library/ubuntu/blobs/uploads/7d9b3d0d-4b77-4a5b-a564-c4b6a5c7d9e1",
+                            "range": "0-1048576"
+                        }
+                    }
+                },
+                {
+                    "match": {
+                        "method": "PUT",
+                        "query": {
+                            "digest": "*"
+                        }
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 201,
+                        "headers": {
+                            "Location": "/v2/library/ubuntu/blobs/sha256:a1b2c3d4e5f60123456789abcdef0123456789abcdef0123456789abcdef0123",
+                            "Docker-Content-Digest": "sha256:a1b2c3d4e5f60123456789abcdef0123456789abcdef0123456789abcdef0123"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "uri": "<path:name>/blobs/<digest>",
+            "methods": [
+                "GET",
+                "HEAD"
+            ],
+            "responses": [
+                {
+                    "match": {
+                        "method": "GET"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 307,
+                        "headers": {
+                            "Location": "https://storage.example.com/docker/v2/library/ubuntu/blobs/sha256:a1b2c3d4e5f60123456789abcdef0123456789abcdef0123456789abcdef0123",
+                            "Docker-Content-Digest": "sha256:a1b2c3d4e5f60123456789abcdef0123456789abcdef0123456789abcdef0123"
+                        }
+                    }
+                },
+                {
+                    "match": {
+                        "method": "HEAD"
+                    },
+                    "passthrough": false,
+                    "response": {
+                        "status": 200,
+                        "headers": {
+                            "Docker-Content-Digest": "sha256:a1b2c3d4e5f60123456789abcdef0123456789abcdef0123456789abcdef0123"
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}
