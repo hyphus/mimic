@@ -133,7 +133,7 @@ def test_startup_settings_are_frozen():
 
 def test_admin_form_keeps_the_stored_secret_when_left_blank(client):
     client.post("/admin/login", data={"password": "hunter2", "csrf_token": csrf_token(client)})
-    save_runtime_settings(_runtime(aws={"use_iam_role": True, "access_key_id": None}))
+    save_runtime_settings(_runtime())
 
     resp = client.post(
         "/admin/config",
@@ -145,6 +145,38 @@ def test_admin_form_keeps_the_stored_secret_when_left_blank(client):
     )
     assert resp.status_code == 302
     assert load_runtime_settings().aws.secret_access_key == "s3cret"
+
+
+def test_switching_to_iam_role_clears_the_stored_secret(client, monkeypatch):
+    monkeypatch.setattr(
+        "mimic.admin.routes.validate_aws_credentials", lambda **_: True
+    )
+    client.post("/admin/login", data={"password": "hunter2", "csrf_token": csrf_token(client)})
+    save_runtime_settings(_runtime())
+
+    resp = client.post(
+        "/admin/config",
+        data={
+            "csrf_token": csrf_token(client),
+            "use_iam_role": "on",
+            "target_host": "example.com",
+            "aws_secret_access_key": "",
+        },
+    )
+    assert resp.status_code == 302
+    saved = load_runtime_settings().aws
+    assert saved.use_iam_role is True
+    assert saved.secret_access_key is None
+    assert saved.access_key_id is None
+
+
+def test_save_runtime_settings_drops_the_secret_under_iam_role():
+    save_runtime_settings(_runtime())
+    save_runtime_settings(_runtime(aws={"use_iam_role": True, "access_key_id": None}))
+    saved = load_runtime_settings().aws
+    assert saved.use_iam_role is True
+    assert saved.secret_access_key is None
+    assert saved.access_key_id is None
 
 
 def test_le_staging_is_driven_by_the_environment(monkeypatch):

@@ -30,6 +30,12 @@ DEFAULT_PUBLIC_BIND = "127.0.0.1:8080"
 DASHBOARD_BUFFER_SIZE = 250
 MAX_BODY_CHARS = 512 * 1024
 BUSY_TIMEOUT_SECONDS = 5.0
+# Retention bound for the `http_log` table. Unauthenticated module traffic can
+# reach `insert_log`, so the table is capped by row count and by the stored
+# text size so the SQLite file cannot grow without limit.
+HTTP_LOG_MAX_ROWS = 10_000
+HTTP_LOG_MAX_BYTES = 256 * 1024 * 1024
+HTTP_LOG_PRUNE_BATCH = 1_000
 
 _TRUTHY = ("1", "true", "t", "yes", "on")
 
@@ -38,7 +44,7 @@ def _as_bool(value: object) -> bool:
     return str(value).strip().lower() in _TRUTHY
 
 
-def _restrict_permissions(path: Path) -> None:
+def restrict_permissions(path: Path) -> None:
     """Owner-only. These files hold the AWS secret, the admin hash and the session key."""
     try:
         path.chmod(0o600)
@@ -46,11 +52,20 @@ def _restrict_permissions(path: Path) -> None:
         log.warning(f"Could not restrict permissions on {path}: {e}")
 
 
+def ensure_private_dir(path: Path) -> Path:
+    """Create a directory with owner-only permissions, repairing an existing one."""
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        path.chmod(0o700)
+    except OSError as e:
+        log.warning(f"Could not restrict permissions on {path}: {e}")
+    return path
+
+
 def data_dir() -> Path:
     """Where all state lives. Environment-only, and created if missing."""
     path = Path(os.environ.get("MIMIC_DATA_DIR") or DEFAULT_DATA_DIR).resolve()
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return ensure_private_dir(path)
 
 
 def env_path() -> Path:
@@ -65,7 +80,7 @@ def _env() -> dict[str, str | None]:
 def database_path() -> Path:
     path = data_dir() / "mimic.sqlite3"
     path.touch(mode=0o600, exist_ok=True)
-    _restrict_permissions(path)
+    restrict_permissions(path)
     return path
 
 
@@ -192,10 +207,17 @@ def ensure_secret_key() -> str:
     """
     key = _env().get("MIMIC_SECRET_KEY")
     if key:
+        # A restored or hand-created .env must be tightened too, not just a fresh one.
+        if env_path().exists():
+            restrict_permissions(env_path())
         return key
     key = secrets.token_hex(32)
+    # set_key preserves an existing file's mode, so tighten it first; otherwise a
+    # pre-existing world-readable .env is written at that mode until the chmod below.
+    if env_path().exists():
+        restrict_permissions(env_path())
     set_key(env_path(), "MIMIC_SECRET_KEY", key)
-    _restrict_permissions(env_path())
+    restrict_permissions(env_path())
     log.info("Generated a new session secret key")
     return key
 
@@ -225,6 +247,15 @@ def save_runtime_settings(runtime: RuntimeSettings) -> None:
     """UPSERT the single row."""
     from mimic.db import execute
 
+    # Role-based credentials never use a stored static secret, so drop it at the
+    # boundary: a caller that forgot to clear the field cannot retain the secret.
+    if runtime.aws.use_iam_role:
+        access_key_id = None
+        secret_access_key = None
+    else:
+        access_key_id = runtime.aws.access_key_id
+        secret_access_key = runtime.aws.secret_access_key
+
     execute(
         """
         INSERT OR REPLACE INTO settings (
@@ -239,8 +270,8 @@ def save_runtime_settings(runtime: RuntimeSettings) -> None:
         """,
         (
             int(runtime.aws.use_iam_role),
-            runtime.aws.access_key_id,
-            runtime.aws.secret_access_key,
+            access_key_id,
+            secret_access_key,
             runtime.aws.target_host.lower(),
             int(runtime.features.create_dns_records),
             int(runtime.features.create_certificates),

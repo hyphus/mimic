@@ -38,6 +38,16 @@ def data_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def reset_login_throttle():
+    """The login throttle keeps process-global state; isolate each test."""
+    from mimic.auth import reset_login_throttle_state
+
+    reset_login_throttle_state()
+    yield
+    reset_login_throttle_state()
+
+
+@pytest.fixture(autouse=True)
 def shipped_modules_enabled(tmp_path, monkeypatch):
     """Serve the shipped modules from copies with default_enabled on.
 

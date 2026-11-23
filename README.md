@@ -126,12 +126,22 @@ The IAM permissions required are:
   overrides it.
 - **AWS credentials are stored unencrypted.** An access key and secret entered in the Configuration
   panel are written in plaintext to `mimic.sqlite3`. Prefer an **IAM role** (instance profile, ECS
-  task role, or IRSA) and tick *Use IAM role* — then no long-lived secret is stored at all.
+  task role, or IRSA) and tick *Use IAM role* — then no long-lived secret is stored at all. Switching
+  to *Use IAM role* clears any previously stored key pair. That only removes the copy in
+  `mimic.sqlite3`; the key itself is **not** rotated or deactivated in AWS, so revoke it in IAM too.
 - `mimic.sqlite3` and `.env` under `MIMIC_DATA_DIR` are created `0600`. They hold the AWS secret,
   the admin password hash, and the session signing key. Keep the data volume off shared storage.
 - `MIMIC_ADMIN_PASSWORD` is read **once**, at first boot, and hashed into the database. It is never
   written to `.env`. Afterwards the variable is ignored; to set a new password, clear the `admin`
   table and restart.
+- **Admin login is rate-limited.** Failed `POST /admin/login` attempts are counted both per client
+  address and account-wide. A client is locked out with escalating backoff (a `429` plus
+  `Retry-After`) after a handful of failures within the window; because a source address can be
+  rotated, a separate account-wide cap locks out all clients after more failures, so total guesses
+  stay bounded no matter how many addresses an attacker uses. A successful login clears both
+  counters. The lockout bounds the guess rate and the CPU spent on the expensive password hash.
+  When a reverse proxy fronts the admin socket, also rate-limit there — Mimic keys on the socket
+  peer address and does not trust forwarded headers.
 - Mimic is a mock server. The modules answer unauthenticated requests by design — do not expose it
   to the internet with anything real behind it.
 
@@ -190,7 +200,9 @@ A 503 from a module under load is the cap, not the module.
 - **Mimic Logs** — a rolling buffer of the server's own log output, on the dashboard.
 - **Request log** (`/admin/logs`) — every HTTP exchange the modules served, with full request and
   response headers and bodies (truncated at 512 KB), filterable by module and paginated. Admin,
-  health and favicon requests are not logged.
+  health and favicon requests are not logged. The table is capped at the newest 10,000 rows or
+  256 MB of stored bodies, whichever is smaller; older rows are pruned as new ones arrive, so
+  unauthenticated module traffic cannot grow the database without bound.
 
 Both log views update live over a single Server-Sent Events stream at `/admin/events`; there is no
 polling timer.

@@ -90,6 +90,7 @@ SCHEMA = [
         response_status INTEGER,
         response_headers TEXT,
         response_body TEXT,
+        bytes INTEGER,
         error TEXT
     )
     """,
@@ -105,6 +106,28 @@ def init_schema() -> None:
         # CREATE TABLE IF NOT EXISTS leaves an existing table untouched, so a
         # database predating a column must have it added explicitly.
         _ensure_column(c, "module_overrides", "error_pages_json", "TEXT")
+        # http_log gained a stored-size column for its retention cap; populate it
+        # for any rows written before the column existed.
+        _ensure_column(c, "http_log", "bytes", "INTEGER")
+        c.execute(
+            "UPDATE http_log SET bytes = "
+            "LENGTH(CAST(COALESCE(request_headers, '') AS BLOB)) + "
+            "LENGTH(CAST(COALESCE(request_body, '') AS BLOB)) + "
+            "LENGTH(CAST(COALESCE(response_headers, '') AS BLOB)) + "
+            "LENGTH(CAST(COALESCE(response_body, '') AS BLOB)) "
+            "WHERE bytes IS NULL"
+        )
+        # The retention cap sums `bytes` on every insert; this index keeps that a
+        # cheap index-only scan instead of reading every stored body. Created
+        # here rather than in SCHEMA because a legacy table lacks the column
+        # until _ensure_column adds it above.
+        c.execute("CREATE INDEX IF NOT EXISTS idx_http_log_bytes ON http_log(bytes)")
+        # A deployment switched to an IAM role under an older build kept the
+        # static secret; purge it so role-based credentials never retain one.
+        c.execute(
+            "UPDATE settings SET aws_access_key_id = NULL, aws_secret_access_key = NULL "
+            "WHERE id = 1 AND use_iam_role = 1"
+        )
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, column_type: str) -> None:

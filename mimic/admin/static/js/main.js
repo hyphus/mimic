@@ -49,6 +49,23 @@ onDocumentReady(function () {
         });
     }, 5000); // 5 seconds
 
+    // The request-log filter applies as soon as a module is chosen. Kept here
+    // rather than as an inline onchange so a script-restricting CSP can apply.
+    const moduleFilterSelect = document.getElementById("module-filter");
+    if (moduleFilterSelect) {
+        moduleFilterSelect.addEventListener("change", function () {
+            moduleFilterSelect.form.submit();
+        });
+    }
+
+    // Clearing the whole request log is destructive, so confirm first.
+    const clearLogForm = document.getElementById("clear-log-form");
+    if (clearLogForm) {
+        clearLogForm.addEventListener("submit", function (ev) {
+            if (!window.confirm("Clear all log entries?")) ev.preventDefault();
+        });
+    }
+
     // Log table functionality
     // Check if we're on the logs page
     if (!document.getElementById("log-config")) {

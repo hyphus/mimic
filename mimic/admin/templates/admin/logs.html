@@ -9,7 +9,7 @@
   <div style="display: flex; flex-direction: column; gap: 6px;">
     <form method="get" style="display: flex; gap: 10px; align-items: center; margin: 0; padding: 0.75rem 0; width: 400px">
       <label for="module-filter" style="margin-right: 10px; white-space: nowrap;">Filter:</label>
-      <select name="module" id="module-filter" onchange="this.form.submit()" style="max-width: 200px;">
+      <select name="module" id="module-filter" style="max-width: 200px;">
         <option value="">All modules</option>
         {% for module_id in unique_modules %}
         <option value="{{ module_id }}" {% if module_filter == module_id %}selected{% endif %}>
@@ -18,7 +18,7 @@
         {% endfor %}
       </select>
       {% if module_filter %}
-      <button type="button" class="btn" onclick="window.location='{{ url_for('admin.logs') }}'">Clear filter</button>
+      <a class="btn" href="{{ url_for('admin.logs') }}">Clear filter</a>
       {% endif %}
     </form>
     <label for="local-time-toggle" style="margin: 0; white-space: nowrap;">
@@ -26,8 +26,7 @@
       <span style="vertical-align: middle;">Local time</span>
     </label>
   </div>
-  <form action="{{ url_for('admin.logs_clear') }}" method="post" onsubmit="return confirm('Clear all log entries?');"
-    style="margin: 0;">
+  <form action="{{ url_for('admin.logs_clear') }}" method="post" id="clear-log-form" style="margin: 0;">
     {{ csrf_input() }}
     <button type="submit" class="danger">Clear log</button>
   </form>

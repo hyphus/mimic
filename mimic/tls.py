@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
-from mimic.settings import data_dir
+from mimic.settings import data_dir, ensure_private_dir, restrict_permissions
 
 log = logging.getLogger(__name__)
 
@@ -29,18 +30,28 @@ def cert_paths() -> tuple[Path, Path]:
     return cert_dir / FULLCHAIN_NAME, cert_dir / CERT_KEY_NAME
 
 
-def _write_private_key(path: Path, key: rsa.RSAPrivateKey) -> None:
-    path.write_bytes(
-        key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.TraditionalOpenSSL,
-            serialization.NoEncryption(),
-        )
+def write_private_key(path: Path, key: rsa.RSAPrivateKey) -> None:
+    """Write PEM key material owner-only.
+
+    The only writer of private keys under $MIMIC_DATA_DIR/certs. ``os.open`` with
+    an explicit mode keeps the file owner-only from creation, so the process umask
+    can never expose it; existing files are re-checked and restricted too.
+    """
+    pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.TraditionalOpenSSL,
+        serialization.NoEncryption(),
     )
+    # O_TRUNC ignores the mode argument on an existing file, so restrict it first;
+    # a pre-existing world-readable key would otherwise stay open during the write.
+    if path.exists():
+        restrict_permissions(path)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        path.chmod(0o600)
-    except OSError as e:
-        log.warning(f"Could not restrict permissions on {path}: {e}")
+        os.write(fd, pem)
+    finally:
+        os.close(fd)
+    restrict_permissions(path)
 
 
 def _generate_self_signed() -> None:
@@ -70,10 +81,10 @@ def _generate_self_signed() -> None:
     )
 
     cert_dir = data_dir() / "certs"
-    cert_dir.mkdir(parents=True, exist_ok=True)
+    ensure_private_dir(cert_dir)
     fullchain_path, key_path = cert_paths()
     fullchain_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
-    _write_private_key(key_path, key)
+    write_private_key(key_path, key)
 
 
 def ensure_certificate() -> None:
@@ -84,6 +95,8 @@ def ensure_certificate() -> None:
     """
     fullchain_path, key_path = cert_paths()
     if fullchain_path.exists() and key_path.exists():
+        # Repair a key an earlier write left world-readable.
+        restrict_permissions(key_path)
         return
     _generate_self_signed()
     log.info("No certificates found, generating a self-signed certificate")
