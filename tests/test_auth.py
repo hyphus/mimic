@@ -179,7 +179,7 @@ def test_global_cap_stops_relentless_ip_rotation():
     attempts = 0
     locked = False
     while attempts < 500:
-        addr = "10.0.%d.%d" % (attempts // 256, attempts % 256)
+        addr = f"10.0.{attempts // 256}.{attempts % 256}"
         if auth.login_retry_after(addr) > 0:
             locked = True
             break

@@ -252,7 +252,9 @@ def test_admin_pages_carry_standard_security_headers(client, path, logged_in):
         _login(client)
     resp = client.get(path)
     assert resp.status_code == 200
-    assert resp.headers["Strict-Transport-Security"] == "max-age=31536000"
+    # No HSTS: Mimic serves self-signed certificates by default and may run
+    # without TLS behind a proxy that terminates it.
+    assert "Strict-Transport-Security" not in resp.headers
     assert resp.headers["X-Content-Type-Options"] == "nosniff"
     assert resp.headers["Referrer-Policy"] == "no-referrer"
 

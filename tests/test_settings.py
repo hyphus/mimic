@@ -14,6 +14,7 @@ from mimic.settings import (
     FeatureSettings,
     RuntimeSettings,
     ensure_secret_key,
+    http_log_retention,
     load_bind_settings,
     load_logging_settings,
     load_runtime_settings,
@@ -183,6 +184,36 @@ def test_le_staging_is_driven_by_the_environment(monkeypatch):
     assert settings.le_staging() is False
     monkeypatch.setenv("MIMIC_USE_LE_STAGING", "1")
     assert settings.le_staging() is True
+
+
+def test_http_log_retention_defaults_are_generous():
+    rows, max_bytes = http_log_retention()
+    assert rows == 1_000_000
+    assert max_bytes == 4 * 1024 ** 3
+
+
+def test_http_log_retention_reads_the_environment(monkeypatch):
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "50")
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_BYTES", str(64 * 1024))
+    assert http_log_retention() == (50, 64 * 1024)
+
+
+def test_http_log_retention_falls_back_on_invalid_values(monkeypatch):
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "not-a-number")
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_BYTES", "-5")
+    rows, max_bytes = http_log_retention()
+    assert rows == 1_000_000
+    assert max_bytes == 4 * 1024 ** 3
+
+
+def test_http_log_retention_is_cached_until_reset(monkeypatch):
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "5")
+    http_log_retention()
+    # A later environment change must not leak into a running process.
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "7")
+    assert http_log_retention()[0] == 5
+    settings.reset_http_log_retention_cache()
+    assert http_log_retention()[0] == 7
 
 
 def test_bind_settings_default_to_a_single_public_socket(data_dir):

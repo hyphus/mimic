@@ -30,18 +30,61 @@ DEFAULT_PUBLIC_BIND = "127.0.0.1:8080"
 DASHBOARD_BUFFER_SIZE = 250
 MAX_BODY_CHARS = 512 * 1024
 BUSY_TIMEOUT_SECONDS = 5.0
-# Retention bound for the `http_log` table. Unauthenticated module traffic can
-# reach `insert_log`, so the table is capped by row count and by the stored
-# text size so the SQLite file cannot grow without limit.
-HTTP_LOG_MAX_ROWS = 10_000
-HTTP_LOG_MAX_BYTES = 256 * 1024 * 1024
+# Retention bounds for the `http_log` table. Unauthenticated module traffic can
+# reach `insert_log`, so rows are pruned as new ones arrive; see
+# http_log_retention() for the environment overrides and the disable option.
+DEFAULT_HTTP_LOG_MAX_ROWS = 1_000_000
+DEFAULT_HTTP_LOG_MAX_BYTES = 4 * 1024 ** 3
 HTTP_LOG_PRUNE_BATCH = 1_000
+
+# Process-lifetime cache so retention is not re-read (and .env reparsed) on
+# every log insert; http_log_retention() fills it once per process.
+_http_log_retention: tuple[int, int] | None = None
 
 _TRUTHY = ("1", "true", "t", "yes", "on")
 
 
 def _as_bool(value: object) -> bool:
     return str(value).strip().lower() in _TRUTHY
+
+
+def http_log_retention() -> tuple[int, int]:
+    """Retention bounds for the `http_log` table as `(max_rows, max_bytes)`.
+
+    Read once from the startup environment (real variables win over `.env`) and
+    cached for the process lifetime. The defaults are generous on purpose — at
+    typical mock-traffic volumes the caps never bite — but the table stays
+    bounded because `insert_log` is reachable from unauthenticated module
+    traffic and must not be able to grow the SQLite file without limit.
+    """
+    global _http_log_retention
+    if _http_log_retention is None:
+        env = _env()
+        rows = _positive_int(env.get("MIMIC_HTTP_LOG_MAX_ROWS"), DEFAULT_HTTP_LOG_MAX_ROWS)
+        bytes_ = _positive_int(env.get("MIMIC_HTTP_LOG_MAX_BYTES"), DEFAULT_HTTP_LOG_MAX_BYTES)
+        _http_log_retention = (rows, bytes_)
+    return _http_log_retention
+
+
+def reset_http_log_retention_cache() -> None:
+    """Drop the cached bounds. Used by tests that change the environment."""
+    global _http_log_retention
+    _http_log_retention = None
+
+
+def _positive_int(value: str | None, default: int) -> int:
+    raw = (value or "").strip()
+    if not raw:
+        return default
+    try:
+        parsed = int(raw)
+    except ValueError:
+        log.warning(f"Unknown MIMIC_HTTP_LOG_MAX_* value {raw!r}, falling back to the default")
+        return default
+    if parsed <= 0:
+        log.warning(f"MIMIC_HTTP_LOG_MAX_* must be positive, got {parsed}; using the default")
+        return default
+    return parsed
 
 
 def restrict_permissions(path: Path) -> None:

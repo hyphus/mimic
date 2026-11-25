@@ -69,6 +69,8 @@ built-in default — first one wins:
 | `MIMIC_PUBLIC_BIND` | `127.0.0.1:8080` | Socket the server listens on, as `host:port`. Read by both Gunicorn and the dev server. |
 | `MIMIC_ADMIN_BIND` | off | A second socket for `/admin` and `/healthz` only, also `host:port`. When set, Gunicorn serves both sockets and a port gate keeps `/admin` off the public one. Its port must differ from the public port. The dev server serves one socket, so it refuses to start when this is set and `MIMIC_PUBLIC_BIND` is not loopback. |
 | `MIMIC_GUNICORN_RELOAD_HUP` | off | If truthy, send **SIGHUP** to the Gunicorn master after config changes so all workers reload. On by default in the Docker image, off elsewhere. |
+| `MIMIC_HTTP_LOG_MAX_ROWS` | 1000000 | Retention cap for the request log: rows beyond this (oldest first) are pruned as new ones arrive. |
+| `MIMIC_HTTP_LOG_MAX_BYTES` | 4294967296 | Same cap in bytes of stored headers and bodies; both bounds apply, whichever is hit first. The defaults are generous on purpose — the point is to keep an unauthenticated client from growing the database without bound, not to limit normal use. |
 | `MIMIC_USE_LE_STAGING` | off | Issue Let's Encrypt certificates from the staging directory instead of production — untrusted certificates, but no rate limits. |
 | `FLASK_DEBUG` | off | Dev server only; when set to `1`, enables Flask debug mode in `mimic.dev`. |
 
@@ -200,9 +202,10 @@ A 503 from a module under load is the cap, not the module.
 - **Mimic Logs** — a rolling buffer of the server's own log output, on the dashboard.
 - **Request log** (`/admin/logs`) — every HTTP exchange the modules served, with full request and
   response headers and bodies (truncated at 512 KB), filterable by module and paginated. Admin,
-  health and favicon requests are not logged. The table is capped at the newest 10,000 rows or
-  256 MB of stored bodies, whichever is smaller; older rows are pruned as new ones arrive, so
-  unauthenticated module traffic cannot grow the database without bound.
+  health and favicon requests are not logged. The table is kept under a retention cap — by default the
+  newest one million rows or 4 GB of stored bodies, whichever comes first (see `MIMIC_HTTP_LOG_MAX_ROWS`
+  and `MIMIC_HTTP_LOG_MAX_BYTES`) — with older rows pruned as new ones arrive, so unauthenticated module
+  traffic cannot grow the database without bound.
 
 Both log views update live over a single Server-Sent Events stream at `/admin/events`; there is no
 polling timer.

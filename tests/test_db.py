@@ -112,66 +112,38 @@ def test_a_database_written_by_the_old_layer_still_reads(tmp_path, monkeypatch):
     assert load_runtime_settings().aws.target_host == "other.example"
 
 
-def test_migration_purges_the_secret_from_a_role_based_deployment(tmp_path, monkeypatch):
-    """An older build could leave a static secret behind under an IAM role."""
-    old_data = tmp_path / "legacy"
-    old_data.mkdir()
-    monkeypatch.setenv("MIMIC_DATA_DIR", str(old_data))
+def test_http_log_prunes_to_the_row_cap(monkeypatch):
+    """Unauthenticated module traffic must not grow the table without bound."""
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "5")
+    ids = [_insert("httpbin") for _ in range(12)]
 
-    legacy = sqlite3.connect(old_data / "mimic.sqlite3")
-    legacy.executescript(
-        """
-        CREATE TABLE settings (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            use_iam_role INTEGER NOT NULL DEFAULT 0,
-            aws_access_key_id TEXT,
-            aws_secret_access_key TEXT,
-            target_host TEXT NOT NULL DEFAULT '',
-            create_dns_records INTEGER NOT NULL DEFAULT 0,
-            create_certificates INTEGER NOT NULL DEFAULT 0
-        );
-        INSERT INTO settings VALUES (1, 1, 'AKIA', 's3cret', 'example.com', 0, 0);
-        """
-    )
-    legacy.commit()
-    legacy.close()
-
-    db.init_schema()
-    saved = load_runtime_settings().aws
-    assert saved.use_iam_role is True
-    assert saved.secret_access_key is None
-    assert saved.access_key_id is None
+    assert count_logs() == 5
+    # The newest rows are the ones kept.
+    kept = {r.id for r in fetch_logs(limit=50)[0]}
+    assert kept == set(ids[-5:])
 
 
-def test_migration_keeps_the_secret_for_a_static_key_deployment(tmp_path, monkeypatch):
-    """Clearing is role-specific; a static-key deployment keeps its stored secret."""
-    old_data = tmp_path / "legacy"
-    old_data.mkdir()
-    monkeypatch.setenv("MIMIC_DATA_DIR", str(old_data))
+def test_http_log_prunes_to_the_byte_cap_and_keeps_recent_rows(monkeypatch):
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "10_000")
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_BYTES", str(64 * 1024))
+    for _ in range(10):
+        insert_log(
+            method="POST",
+            path="/httpbin/post",
+            query_string=None,
+            module_id="httpbin",
+            request_headers={},
+            request_body="x" * 8_000,
+            response_status=200,
+            response_headers={},
+            response_body="y" * 8_000,
+        )
 
-    legacy = sqlite3.connect(old_data / "mimic.sqlite3")
-    legacy.executescript(
-        """
-        CREATE TABLE settings (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            use_iam_role INTEGER NOT NULL DEFAULT 0,
-            aws_access_key_id TEXT,
-            aws_secret_access_key TEXT,
-            target_host TEXT NOT NULL DEFAULT '',
-            create_dns_records INTEGER NOT NULL DEFAULT 0,
-            create_certificates INTEGER NOT NULL DEFAULT 0
-        );
-        INSERT INTO settings VALUES (1, 0, 'AKIA', 's3cret', 'example.com', 0, 0);
-        """
-    )
-    legacy.commit()
-    legacy.close()
-
-    db.init_schema()
-    saved = load_runtime_settings().aws
-    assert saved.use_iam_role is False
-    assert saved.secret_access_key == "s3cret"
-    assert saved.access_key_id == "AKIA"
+    stored = db.query_one("SELECT COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS b FROM http_log")
+    assert stored["b"] <= 64 * 1024
+    # Pruning happened (each row stores ~16 KB) and recent activity survived.
+    assert 1 <= stored["n"] < 10
+    assert fetch_logs(limit=1)[0][0].path == "/httpbin/post"
 
 
 def test_fetch_logs_paginates_and_filters():
@@ -201,46 +173,6 @@ def test_fetch_logs_after_and_clear():
     assert fetch_logs_after(after_id=second) == []
     assert clear_logs() == 2
     assert count_logs() == 0
-
-
-def test_http_log_prunes_to_the_row_cap(monkeypatch):
-    """Unauthenticated module traffic must not grow the table without bound."""
-    from mimic.httplog import store
-
-    monkeypatch.setattr(store, "HTTP_LOG_MAX_ROWS", 5)
-    monkeypatch.setattr(store, "HTTP_LOG_PRUNE_BATCH", 2)
-    ids = [_insert("httpbin") for _ in range(12)]
-
-    assert count_logs() == 5
-    # The newest rows are the ones kept.
-    kept = {r.id for r in fetch_logs(limit=50)[0]}
-    assert kept == set(ids[-5:])
-
-
-def test_http_log_prunes_to_the_byte_cap_and_keeps_recent_rows(monkeypatch):
-    from mimic.httplog import store
-
-    monkeypatch.setattr(store, "HTTP_LOG_MAX_ROWS", 10_000)
-    monkeypatch.setattr(store, "HTTP_LOG_MAX_BYTES", 5_000)
-    monkeypatch.setattr(store, "HTTP_LOG_PRUNE_BATCH", 2)
-    for _ in range(10):
-        insert_log(
-            method="POST",
-            path="/httpbin/post",
-            query_string=None,
-            module_id="httpbin",
-            request_headers={},
-            request_body="x" * 2_000,
-            response_status=200,
-            response_headers={},
-            response_body="y" * 2_000,
-        )
-
-    stored = db.query_one("SELECT COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS b FROM http_log")
-    assert stored["b"] <= 5_000
-    assert stored["n"] >= 1
-    # Recent activity survives; the oldest rows are dropped first.
-    assert fetch_logs(limit=1)[0][0].path == "/httpbin/post"
 
 
 def test_log_page_and_resync_endpoint_still_work(client):

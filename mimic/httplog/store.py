@@ -10,11 +10,7 @@ from datetime import datetime, UTC
 
 from mimic.db import execute, query, query_one
 from mimic.events import publish
-from mimic.settings import (
-    HTTP_LOG_MAX_BYTES,
-    HTTP_LOG_MAX_ROWS,
-    HTTP_LOG_PRUNE_BATCH,
-)
+from mimic.settings import HTTP_LOG_PRUNE_BATCH, http_log_retention
 
 
 @dataclass
@@ -139,16 +135,18 @@ def _prune_http_log() -> None:
     `http_log` is append-only and `insert_log` is reachable from every module
     request, so without this an unauthenticated client could grow the SQLite
     file without limit. The table is kept under both a row cap and a total
-    stored-bytes cap (the `bytes` column summed on insert); deletion is
+    stored-bytes cap (the `bytes` column summed on insert), configurable via
+    MIMIC_HTTP_LOG_MAX_ROWS / MIMIC_HTTP_LOG_MAX_BYTES; deletion is
     oldest-first so recent activity survives.
     """
+    max_rows, max_bytes = http_log_retention()
     # Walk newest-first, keeping rows while they fit under both caps. The
     # smallest kept id is the boundary; everything older is dropped. A single
     # DELETE per call keeps the cost bounded even when the table is far over.
     totals = query_one(
         "SELECT COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS total FROM http_log"
     )
-    if totals["n"] <= HTTP_LOG_MAX_ROWS and totals["total"] <= HTTP_LOG_MAX_BYTES:
+    if totals["n"] <= max_rows and totals["total"] <= max_bytes:
         return
     boundary = query_one(
         """
@@ -161,7 +159,7 @@ def _prune_http_log() -> None:
         SELECT MIN(id) AS keep_id FROM ranked
         WHERE rownum <= ? AND running <= ?
         """,
-        (HTTP_LOG_MAX_ROWS, HTTP_LOG_MAX_BYTES),
+        (max_rows, max_bytes),
     )
     keep_id = boundary["keep_id"]
     if keep_id is None:
