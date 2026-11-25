@@ -90,10 +90,14 @@ SCHEMA = [
         response_status INTEGER,
         response_headers TEXT,
         response_body TEXT,
+        bytes INTEGER,
         error TEXT
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_http_log_ts ON http_log(ts DESC)",
+    # The retention cap sums `bytes` on every insert; this keeps that a cheap
+    # index-only scan instead of reading every stored body.
+    "CREATE INDEX IF NOT EXISTS idx_http_log_bytes ON http_log(bytes)",
 ]
 
 

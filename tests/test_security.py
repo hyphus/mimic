@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import stat
 from pathlib import Path
 
@@ -76,6 +77,87 @@ def test_env_file_is_owner_only(app, data_dir):
         assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
 
 
+def test_existing_world_readable_env_is_repaired_on_boot(data_dir, monkeypatch):
+    from mimic.settings import ensure_secret_key
+
+    monkeypatch.delenv("MIMIC_SECRET_KEY", raising=False)
+    env_file = data_dir / ".env"
+    env_file.write_text("MIMIC_SECRET_KEY='restored-key'\n")
+    env_file.chmod(0o644)
+
+    assert ensure_secret_key() == "restored-key"
+    assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
+
+
+def test_world_readable_env_without_the_key_is_tightened_before_writing(data_dir, monkeypatch):
+    from mimic.settings import ensure_secret_key
+
+    monkeypatch.delenv("MIMIC_SECRET_KEY", raising=False)
+    env_file = data_dir / ".env"
+    env_file.write_text("OTHER=1\n")
+    env_file.chmod(0o644)
+
+    assert ensure_secret_key()
+    assert "MIMIC_SECRET_KEY" in env_file.read_text()
+    assert stat.S_IMODE(env_file.stat().st_mode) == 0o600
+
+
+def test_existing_world_readable_certificate_key_is_repaired_on_boot(data_dir):
+    from mimic.tls import cert_paths, ensure_certificate
+
+    ensure_certificate()
+    _, key_path = cert_paths()
+    key_path.chmod(0o644)
+
+    ensure_certificate()
+    assert stat.S_IMODE(key_path.stat().st_mode) == 0o600
+
+
+def test_acme_account_key_is_owner_only(data_dir):
+    from mimic.acme import _get_account_key
+
+    _get_account_key()
+    account_key = data_dir / "certs" / "account.key"
+    assert stat.S_IMODE(account_key.stat().st_mode) == 0o600
+
+
+def test_acme_key_writer_matches_the_self_signed_writer(data_dir):
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    from mimic.acme import _get_account_key
+    from mimic.tls import cert_paths, write_private_key
+
+    _get_account_key()
+    account_mode = stat.S_IMODE((data_dir / "certs" / "account.key").stat().st_mode)
+
+    _, key_path = cert_paths()
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    write_private_key(key_path, key)
+
+    assert stat.S_IMODE(key_path.stat().st_mode) == account_mode == 0o600
+
+
+def test_existing_world_readable_account_key_is_repaired_on_load(data_dir):
+    from mimic.acme import _get_account_key
+
+    _get_account_key()
+    account_key = data_dir / "certs" / "account.key"
+    account_key.chmod(0o644)
+
+    _get_account_key()
+    assert stat.S_IMODE(account_key.stat().st_mode) == 0o600
+
+
+def test_cert_directory_is_owner_only(data_dir):
+    from mimic.acme import _get_account_key
+
+    (data_dir / "certs").mkdir()
+    (data_dir / "certs").chmod(0o755)
+
+    _get_account_key()
+    assert stat.S_IMODE((data_dir / "certs").stat().st_mode) == 0o700
+
+
 def test_environment_is_not_mirrored_into_env_file(monkeypatch, data_dir):
     monkeypatch.setenv("MIMIC_LOG_LEVEL", "DEBUG")
     from mimic.app import create_app
@@ -87,7 +169,7 @@ def test_environment_is_not_mirrored_into_env_file(monkeypatch, data_dir):
 
 
 def test_dashboard_log_output_is_escaped():
-    js = (REPO_ROOT / "mimic/admin/templates/admin/dashboard.html").read_text()
+    js = (REPO_ROOT / "mimic/admin/static/js/dashboard.js").read_text()
     assert "escapeHtml(content)" in js
     assert "${formattedContent}" in js
 
@@ -158,7 +240,39 @@ def test_admin_pages_cannot_be_framed(client, path, logged_in):
     resp = client.get(path)
     assert resp.status_code == 200
     assert resp.headers["X-Frame-Options"] == "DENY"
-    assert resp.headers["Content-Security-Policy"] == "frame-ancestors 'none'"
+    assert "frame-ancestors 'none'" in resp.headers["Content-Security-Policy"]
+
+
+@pytest.mark.parametrize(
+    ("path", "logged_in"),
+    [("/admin/login", False), ("/admin/", True), ("/admin/logs", True), ("/admin/static/css/style.css", False)],
+)
+def test_admin_pages_carry_standard_security_headers(client, path, logged_in):
+    if logged_in:
+        _login(client)
+    resp = client.get(path)
+    assert resp.status_code == 200
+    # No HSTS: Mimic serves self-signed certificates by default and may run
+    # without TLS behind a proxy that terminates it.
+    assert "Strict-Transport-Security" not in resp.headers
+    assert resp.headers["X-Content-Type-Options"] == "nosniff"
+    assert resp.headers["Referrer-Policy"] == "no-referrer"
+
+
+def test_admin_csp_restricts_scripts_and_objects(client):
+    resp = client.get("/admin/login")
+    csp = resp.headers["Content-Security-Policy"]
+    assert "script-src 'self'" in csp
+    assert "object-src 'none'" in csp
+    assert "default-src 'self'" in csp
+
+
+def test_admin_templates_have_no_inline_scripts_or_event_handlers():
+    # A script-src 'self' CSP only holds if nothing relies on inline script.
+    for name in ("base.html", "login.html", "dashboard.html", "logs.html"):
+        html = (REPO_ROOT / "mimic/admin/templates/admin" / name).read_text()
+        assert "<script>" not in html, name
+        assert not re.search(r"\son(click|change|submit|load|input|error)=", html), name
 
 
 # --- request log filter -------------------------------------------------------------

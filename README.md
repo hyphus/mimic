@@ -69,6 +69,8 @@ built-in default — first one wins:
 | `MIMIC_PUBLIC_BIND` | `127.0.0.1:8080` | Socket the server listens on, as `host:port`. Read by both Gunicorn and the dev server. |
 | `MIMIC_ADMIN_BIND` | off | A second socket for `/admin` and `/healthz` only, also `host:port`. When set, Gunicorn serves both sockets and a port gate keeps `/admin` off the public one. Its port must differ from the public port. The dev server serves one socket, so it refuses to start when this is set and `MIMIC_PUBLIC_BIND` is not loopback. |
 | `MIMIC_GUNICORN_RELOAD_HUP` | off | If truthy, send **SIGHUP** to the Gunicorn master after config changes so all workers reload. On by default in the Docker image, off elsewhere. |
+| `MIMIC_HTTP_LOG_MAX_ROWS` | 1000000 | Retention cap for the request log: rows beyond this (oldest first) are pruned as new ones arrive. |
+| `MIMIC_HTTP_LOG_MAX_BYTES` | 4294967296 | Same cap in bytes of stored headers and bodies; both bounds apply, whichever is hit first. The defaults are generous on purpose — the point is to keep an unauthenticated client from growing the database without bound, not to limit normal use. |
 | `MIMIC_USE_LE_STAGING` | off | Issue Let's Encrypt certificates from the staging directory instead of production — untrusted certificates, but no rate limits. |
 | `FLASK_DEBUG` | off | Dev server only; when set to `1`, enables Flask debug mode in `mimic.dev`. |
 
@@ -126,12 +128,22 @@ The IAM permissions required are:
   overrides it.
 - **AWS credentials are stored unencrypted.** An access key and secret entered in the Configuration
   panel are written in plaintext to `mimic.sqlite3`. Prefer an **IAM role** (instance profile, ECS
-  task role, or IRSA) and tick *Use IAM role* — then no long-lived secret is stored at all.
+  task role, or IRSA) and tick *Use IAM role* — then no long-lived secret is stored at all. Switching
+  to *Use IAM role* clears any previously stored key pair. That only removes the copy in
+  `mimic.sqlite3`; the key itself is **not** rotated or deactivated in AWS, so revoke it in IAM too.
 - `mimic.sqlite3` and `.env` under `MIMIC_DATA_DIR` are created `0600`. They hold the AWS secret,
   the admin password hash, and the session signing key. Keep the data volume off shared storage.
 - `MIMIC_ADMIN_PASSWORD` is read **once**, at first boot, and hashed into the database. It is never
   written to `.env`. Afterwards the variable is ignored; to set a new password, clear the `admin`
   table and restart.
+- **Admin login is rate-limited.** Failed `POST /admin/login` attempts are counted both per client
+  address and account-wide. A client is locked out with escalating backoff (a `429` plus
+  `Retry-After`) after a handful of failures within the window; because a source address can be
+  rotated, a separate account-wide cap locks out all clients after more failures, so total guesses
+  stay bounded no matter how many addresses an attacker uses. A successful login clears both
+  counters. The lockout bounds the guess rate and the CPU spent on the expensive password hash.
+  When a reverse proxy fronts the admin socket, also rate-limit there — Mimic keys on the socket
+  peer address and does not trust forwarded headers.
 - Mimic is a mock server. The modules answer unauthenticated requests by design — do not expose it
   to the internet with anything real behind it.
 
@@ -190,7 +202,10 @@ A 503 from a module under load is the cap, not the module.
 - **Mimic Logs** — a rolling buffer of the server's own log output, on the dashboard.
 - **Request log** (`/admin/logs`) — every HTTP exchange the modules served, with full request and
   response headers and bodies (truncated at 512 KB), filterable by module and paginated. Admin,
-  health and favicon requests are not logged.
+  health and favicon requests are not logged. The table is kept under a retention cap — by default the
+  newest one million rows or 4 GB of stored bodies, whichever comes first (see `MIMIC_HTTP_LOG_MAX_ROWS`
+  and `MIMIC_HTTP_LOG_MAX_BYTES`) — with older rows pruned as new ones arrive, so unauthenticated module
+  traffic cannot grow the database without bound.
 
 Both log views update live over a single Server-Sent Events stream at `/admin/events`; there is no
 polling timer.

@@ -14,6 +14,7 @@ from mimic.settings import (
     FeatureSettings,
     RuntimeSettings,
     ensure_secret_key,
+    http_log_retention,
     load_bind_settings,
     load_logging_settings,
     load_runtime_settings,
@@ -133,7 +134,7 @@ def test_startup_settings_are_frozen():
 
 def test_admin_form_keeps_the_stored_secret_when_left_blank(client):
     client.post("/admin/login", data={"password": "hunter2", "csrf_token": csrf_token(client)})
-    save_runtime_settings(_runtime(aws={"use_iam_role": True, "access_key_id": None}))
+    save_runtime_settings(_runtime())
 
     resp = client.post(
         "/admin/config",
@@ -147,10 +148,72 @@ def test_admin_form_keeps_the_stored_secret_when_left_blank(client):
     assert load_runtime_settings().aws.secret_access_key == "s3cret"
 
 
+def test_switching_to_iam_role_clears_the_stored_secret(client, monkeypatch):
+    monkeypatch.setattr(
+        "mimic.admin.routes.validate_aws_credentials", lambda **_: True
+    )
+    client.post("/admin/login", data={"password": "hunter2", "csrf_token": csrf_token(client)})
+    save_runtime_settings(_runtime())
+
+    resp = client.post(
+        "/admin/config",
+        data={
+            "csrf_token": csrf_token(client),
+            "use_iam_role": "on",
+            "target_host": "example.com",
+            "aws_secret_access_key": "",
+        },
+    )
+    assert resp.status_code == 302
+    saved = load_runtime_settings().aws
+    assert saved.use_iam_role is True
+    assert saved.secret_access_key is None
+    assert saved.access_key_id is None
+
+
+def test_save_runtime_settings_drops_the_secret_under_iam_role():
+    save_runtime_settings(_runtime())
+    save_runtime_settings(_runtime(aws={"use_iam_role": True, "access_key_id": None}))
+    saved = load_runtime_settings().aws
+    assert saved.use_iam_role is True
+    assert saved.secret_access_key is None
+    assert saved.access_key_id is None
+
+
 def test_le_staging_is_driven_by_the_environment(monkeypatch):
     assert settings.le_staging() is False
     monkeypatch.setenv("MIMIC_USE_LE_STAGING", "1")
     assert settings.le_staging() is True
+
+
+def test_http_log_retention_defaults_are_generous():
+    rows, max_bytes = http_log_retention()
+    assert rows == 1_000_000
+    assert max_bytes == 4 * 1024 ** 3
+
+
+def test_http_log_retention_reads_the_environment(monkeypatch):
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "50")
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_BYTES", str(64 * 1024))
+    assert http_log_retention() == (50, 64 * 1024)
+
+
+def test_http_log_retention_falls_back_on_invalid_values(monkeypatch):
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "not-a-number")
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_BYTES", "-5")
+    rows, max_bytes = http_log_retention()
+    assert rows == 1_000_000
+    assert max_bytes == 4 * 1024 ** 3
+
+
+def test_http_log_retention_is_cached_until_reset(monkeypatch):
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "5")
+    http_log_retention()
+    # A later environment change must not leak into a running process.
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "7")
+    assert http_log_retention()[0] == 5
+    settings.reset_http_log_retention_cache()
+    assert http_log_retention()[0] == 7
 
 
 def test_bind_settings_default_to_a_single_public_socket(data_dir):

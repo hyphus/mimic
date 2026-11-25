@@ -16,6 +16,7 @@ from flask import (
     current_app,
     flash,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -25,7 +26,12 @@ from flask import (
 )
 from markupsafe import Markup, escape
 
-from mimic.auth import verify_admin_password
+from mimic.auth import (
+    login_retry_after,
+    register_login_failure,
+    register_login_success,
+    verify_admin_password,
+)
 from mimic.aws import validate_aws_credentials
 from mimic.events import stream
 from mimic.httplog.setup import get_dashboard_log_entries
@@ -142,10 +148,28 @@ def require_csrf_token() -> None:
         abort(400, description="Invalid or missing CSRF token")
 
 
+# Applied to every admin blueprint response (pages, redirects and static files).
+# Scripts stay same-origin only, so the inline handlers that used to live in the
+# templates moved to admin/static/js; inline styles are still allowed because the
+# pages use style attributes and <style> blocks for layout.
+ADMIN_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+
 @admin_bp.after_request
-def deny_framing(response: Response) -> Response:
+def set_security_headers(response: Response) -> Response:
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    response.headers["Content-Security-Policy"] = ADMIN_CSP
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
     return response
 
 
@@ -167,9 +191,23 @@ def login() -> Any:
     if session.get("mimic_admin"):
         return redirect(url_for("admin.dashboard"))
     err = None
+    # The admin account is a singleton and the endpoint is unauthenticated, so
+    # throttle by client address before doing any password check. Failures cost
+    # an expensive scrypt/pbkdf2 verification each; the lockout bounds both the
+    # guess rate and the CPU a single client can spend in the gthread pool.
+    client = request.remote_addr or ""
     if request.method == "POST":
+        retry_after = login_retry_after(client)
+        if retry_after > 0:
+            response = make_response(
+                render_template("admin/login.html", error="Too many failed attempts. Try again later."),
+                429,
+            )
+            response.headers["Retry-After"] = str(int(retry_after) + 1)
+            return response
         admin_pass = (request.form.get("password") or "").strip()
         if verify_admin_password(admin_pass):
+            register_login_success(client)
             # A fresh session rotates the CSRF token at the privilege change.
             session.clear()
             session["mimic_admin"] = True
@@ -178,6 +216,7 @@ def login() -> Any:
             if not (nxt == "/admin" or nxt.startswith("/admin/")):
                 nxt = url_for("admin.dashboard")
             return redirect(nxt)
+        register_login_failure(client)
         err = "Invalid password."
     return render_template("admin/login.html", error=err)
 
@@ -401,13 +440,19 @@ def config_save() -> Any:
 
     current = load_runtime_settings()
 
-    # A blank secret field means "leave the stored one alone".
-    if not aws_secret_access_key:
+    if use_iam_role:
+        # Role-based credentials must not carry a stored static secret forward:
+        # erase it rather than retaining it, so the saved row is genuinely empty.
+        if current.aws.secret_access_key:
+            flash("Stored AWS secret cleared because the IAM role is now in use.", "info")
+        aws_secret_access_key = None
+    elif not aws_secret_access_key:
+        # A blank secret field means "leave the stored one alone".
         aws_secret_access_key = current.aws.secret_access_key or ""
 
     # Validate AWS creds
     if use_iam_role or aws_access_key_id:
-        if not validate_aws_credentials(key=aws_access_key_id, secret=aws_secret_access_key):
+        if not validate_aws_credentials(key=aws_access_key_id, secret=aws_secret_access_key or ""):
             return redirect(url_for("admin.dashboard"))
 
     updated = RuntimeSettings(

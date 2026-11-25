@@ -112,6 +112,40 @@ def test_a_database_written_by_the_old_layer_still_reads(tmp_path, monkeypatch):
     assert load_runtime_settings().aws.target_host == "other.example"
 
 
+def test_http_log_prunes_to_the_row_cap(monkeypatch):
+    """Unauthenticated module traffic must not grow the table without bound."""
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "5")
+    ids = [_insert("httpbin") for _ in range(12)]
+
+    assert count_logs() == 5
+    # The newest rows are the ones kept.
+    kept = {r.id for r in fetch_logs(limit=50)[0]}
+    assert kept == set(ids[-5:])
+
+
+def test_http_log_prunes_to_the_byte_cap_and_keeps_recent_rows(monkeypatch):
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_ROWS", "10_000")
+    monkeypatch.setenv("MIMIC_HTTP_LOG_MAX_BYTES", str(64 * 1024))
+    for _ in range(10):
+        insert_log(
+            method="POST",
+            path="/httpbin/post",
+            query_string=None,
+            module_id="httpbin",
+            request_headers={},
+            request_body="x" * 8_000,
+            response_status=200,
+            response_headers={},
+            response_body="y" * 8_000,
+        )
+
+    stored = db.query_one("SELECT COUNT(*) AS n, COALESCE(SUM(bytes), 0) AS b FROM http_log")
+    assert stored["b"] <= 64 * 1024
+    # Pruning happened (each row stores ~16 KB) and recent activity survived.
+    assert 1 <= stored["n"] < 10
+    assert fetch_logs(limit=1)[0][0].path == "/httpbin/post"
+
+
 def test_fetch_logs_paginates_and_filters():
     for _ in range(3):
         _insert("httpbin")

@@ -16,7 +16,8 @@ from datetime import datetime, UTC
 from josepy import JWKRSA
 
 from mimic.aws import create_dns_record, delete_dns_record, normalize_domain
-from mimic.settings import data_dir
+from mimic.settings import data_dir, ensure_private_dir, restrict_permissions
+from mimic.tls import write_private_key
 
 log = logging.getLogger(__name__)
 
@@ -25,14 +26,12 @@ LE_STAGING = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
 
 def _get_account_key():
-    cert_dir = (data_dir() / "certs")
-
-    if not cert_dir.exists():
-        cert_dir.mkdir(parents=True, exist_ok=True)
+    cert_dir = ensure_private_dir(data_dir() / "certs")
 
     account_key = cert_dir / "account.key"
 
     if account_key.exists():
+        restrict_permissions(account_key)
         return serialization.load_pem_private_key(
             account_key.read_bytes(),
             password=None,
@@ -43,13 +42,7 @@ def _get_account_key():
         key_size=4096,
     )
 
-    account_key.write_bytes(
-        key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.TraditionalOpenSSL,
-            serialization.NoEncryption(),
-        )
-    )
+    write_private_key(account_key, key)
 
     return key
 
@@ -288,13 +281,7 @@ def generate_certificate(domains, staging=False):
         cert_pem = finalized.fullchain_pem
         log.debug(f"Issued Certificate:\n{cert_pem!r}")
 
-        privkey_path.write_bytes(
-            cert_key.private_bytes(
-                serialization.Encoding.PEM,
-                serialization.PrivateFormat.TraditionalOpenSSL,
-                serialization.NoEncryption(),
-            )
-        )
+        write_private_key(privkey_path, cert_key)
 
         fullchain_path.write_text(cert_pem)
         log.info("Certificates created successfully")
